@@ -1,4 +1,4 @@
-import Subject from '../models/Model.js'
+import Subject from '../models/Subject.js'
 import Chapter from '../models/Chapter.js'
 import StudyPlan from '../models/StudyPlan.js'
 import { generateSchedule, detectBurnout } from '../utils/plannerLogic.js'

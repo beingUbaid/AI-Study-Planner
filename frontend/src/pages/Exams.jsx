@@ -150,15 +150,15 @@ const Exams = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-6 border-b border-slate-800/80">
           <div className="font-bold text-lg text-white">Scheduled Exams</div>
           
-          <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1">
             {["All", ...(subjects || []).map(s => s.name)].map(subj => (
               <button
                 key={subj}
                 onClick={() => setSubjectFilter(subj)}
-                className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all duration-200 cursor-pointer whitespace-nowrap ${
+                className={`px-3.5 py-2 rounded-xl border transition-all duration-200 cursor-pointer whitespace-nowrap ${
                   subjectFilter === subj
-                    ? 'bg-primary-500 border-primary-500 text-white shadow-sm'
-                    : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200'
+                    ? 'text-sm font-extrabold bg-gradient-to-r from-primary-500 to-teal-500 text-white shadow-lg border-teal-400 scale-105'
+                    : 'text-xs font-bold text-slate-350 bg-slate-800/80 border-slate-700 hover:text-white hover:bg-slate-750'
                 }`}
               >
                 {subj}

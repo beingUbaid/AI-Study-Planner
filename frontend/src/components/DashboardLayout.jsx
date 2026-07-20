@@ -17,6 +17,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { subjectsAPI, dashboardAPI, analyticsAPI } from '../services/api';
+import Logo from './Logo';
 
 const DashboardLayout = () => {
   const navigate = useNavigate();
@@ -327,26 +328,18 @@ const DashboardLayout = () => {
       <aside className="w-64 bg-dark-900/80 backdrop-blur-md border-r border-slate-800/80 flex-col justify-between hidden md:flex p-6 z-20">
         <div>
           {/* Logo */}
-          <Link to="/dashboard" className="flex items-center gap-3 mb-10 cursor-pointer">
-            <div className="p-2.5 bg-gradient-to-tr from-primary-500 to-purple-600 rounded-xl shadow-lg">
-              <Brain className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="font-extrabold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary-400 to-purple-400">
-                StudyPlanner
-              </h1>
-              <p className="text-[10px] text-slate-400 tracking-wider uppercase font-semibold">AI Assistant Enabled</p>
-            </div>
+          <Link to="/dashboard" className="block mb-8 cursor-pointer">
+            <Logo size="md" />
           </Link>
 
           {/* Nav Links */}
-          <nav className="space-y-2">
+          <nav className="space-y-2.5">
             <Link
               to="/dashboard"
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                 activePath === '/dashboard'
-                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
-                  : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 border border-transparent'
+                  ? 'bg-gradient-to-r from-primary-500/20 via-purple-500/15 to-transparent text-white font-extrabold text-base border-l-4 border-primary-400 shadow-md shadow-primary-500/10 scale-[1.02]'
+                  : 'text-slate-350 text-sm font-bold hover:bg-slate-800/40 hover:text-white border-l-4 border-transparent'
               }`}
             >
               <BarChart3 className="w-5 h-5" />
@@ -355,10 +348,10 @@ const DashboardLayout = () => {
 
             <Link
               to="/planner"
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                 activePath === '/planner'
-                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
-                  : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 border border-transparent'
+                  ? 'bg-gradient-to-r from-primary-500/20 via-purple-500/15 to-transparent text-white font-extrabold text-base border-l-4 border-primary-400 shadow-md shadow-primary-500/10 scale-[1.02]'
+                  : 'text-slate-350 text-sm font-bold hover:bg-slate-800/40 hover:text-white border-l-4 border-transparent'
               }`}
             >
               <CalendarRange className="w-5 h-5" />
@@ -367,10 +360,10 @@ const DashboardLayout = () => {
 
             <Link
               to="/ai-assistant"
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                 activePath === '/ai-assistant'
-                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
-                  : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 border border-transparent'
+                  ? 'bg-gradient-to-r from-primary-500/20 via-purple-500/15 to-transparent text-white font-extrabold text-base border-l-4 border-primary-400 shadow-md shadow-primary-500/10 scale-[1.02]'
+                  : 'text-slate-350 text-sm font-bold hover:bg-slate-800/40 hover:text-white border-l-4 border-transparent'
               }`}
             >
               <MessageSquare className="w-5 h-5" />
@@ -379,10 +372,10 @@ const DashboardLayout = () => {
             
             <Link
               to="/exams"
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                 activePath === '/exams'
-                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
-                  : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 border border-transparent'
+                  ? 'bg-gradient-to-r from-primary-500/20 via-purple-500/15 to-transparent text-white font-extrabold text-base border-l-4 border-primary-400 shadow-md shadow-primary-500/10 scale-[1.02]'
+                  : 'text-slate-350 text-sm font-bold hover:bg-slate-800/40 hover:text-white border-l-4 border-transparent'
               }`}
             >
               <BookOpen className="w-5 h-5" />
@@ -391,10 +384,10 @@ const DashboardLayout = () => {
 
             <Link
               to="/subjects"
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                 activePath === '/subjects'
-                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
-                  : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 border border-transparent'
+                  ? 'bg-gradient-to-r from-primary-500/20 via-purple-500/15 to-transparent text-white font-extrabold text-base border-l-4 border-primary-400 shadow-md shadow-primary-500/10 scale-[1.02]'
+                  : 'text-slate-350 text-sm font-bold hover:bg-slate-800/40 hover:text-white border-l-4 border-transparent'
               }`}
             >
               <GraduationCap className="w-5 h-5" />
@@ -403,10 +396,10 @@ const DashboardLayout = () => {
 
             <Link
               to="/study"
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                 activePath === '/study'
-                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
-                  : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 border border-transparent'
+                  ? 'bg-gradient-to-r from-primary-500/20 via-purple-500/15 to-transparent text-white font-extrabold text-base border-l-4 border-primary-400 shadow-md shadow-primary-500/10 scale-[1.02]'
+                  : 'text-slate-350 text-sm font-bold hover:bg-slate-800/40 hover:text-white border-l-4 border-transparent'
               }`}
             >
               <Clock className="w-5 h-5" />
@@ -452,10 +445,7 @@ const DashboardLayout = () => {
         <header className="px-6 py-4 bg-dark-900/40 backdrop-blur-md border-b border-slate-800/60 flex justify-between items-center z-20">
           <div className="flex items-center gap-3 md:hidden">
             {/* Mobile Logo */}
-            <div className="p-2 bg-gradient-to-tr from-primary-500 to-purple-600 rounded-lg">
-              <Brain className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-extrabold text-sm text-white">StudyPlanner</span>
+            <Logo size="sm" />
           </div>
 
           {/* Desktop/Tablet Breadcrumb */}
@@ -467,13 +457,13 @@ const DashboardLayout = () => {
 
           <div className="flex items-center gap-4">
             {/* Mobile Nav Links */}
-            <nav className="flex md:hidden gap-1 bg-slate-800/40 border border-slate-700/50 p-1 rounded-lg text-[10px] overflow-x-auto max-w-[220px]">
-              <Link to="/dashboard" className={`px-2 py-1 rounded ${activePath === '/dashboard' ? 'bg-primary-500 text-white' : 'text-slate-400'}`}>Dashboard</Link>
-              <Link to="/planner" className={`px-2 py-1 rounded ${activePath === '/planner' ? 'bg-primary-500 text-white' : 'text-slate-400'}`}>Calendar</Link>
-              <Link to="/ai-assistant" className={`px-2 py-1 rounded ${activePath === '/ai-assistant' ? 'bg-primary-500 text-white' : 'text-slate-400'}`}>AI Chat</Link>
-              <Link to="/subjects" className={`px-2 py-1 rounded ${activePath === '/subjects' ? 'bg-primary-500 text-white' : 'text-slate-400'}`}>Subjects</Link>
-              <Link to="/exams" className={`px-2 py-1 rounded ${activePath === '/exams' ? 'bg-primary-500 text-white' : 'text-slate-400'}`}>Exams</Link>
-              <Link to="/study" className={`px-2 py-1 rounded ${activePath === '/study' ? 'bg-primary-500 text-white' : 'text-slate-400'}`}>Study</Link>
+            <nav className="flex md:hidden gap-1.5 bg-slate-800/40 border border-slate-700/50 p-1.5 rounded-xl text-xs overflow-x-auto max-w-[240px]">
+              <Link to="/dashboard" className={`px-2.5 py-1 rounded-lg ${activePath === '/dashboard' ? 'bg-primary-500 text-white font-extrabold shadow-sm' : 'text-slate-350 font-semibold'}`}>Dashboard</Link>
+              <Link to="/planner" className={`px-2.5 py-1 rounded-lg ${activePath === '/planner' ? 'bg-primary-500 text-white font-extrabold shadow-sm' : 'text-slate-350 font-semibold'}`}>Calendar</Link>
+              <Link to="/ai-assistant" className={`px-2.5 py-1 rounded-lg ${activePath === '/ai-assistant' ? 'bg-primary-500 text-white font-extrabold shadow-sm' : 'text-slate-350 font-semibold'}`}>AI Chat</Link>
+              <Link to="/subjects" className={`px-2.5 py-1 rounded-lg ${activePath === '/subjects' ? 'bg-primary-500 text-white font-extrabold shadow-sm' : 'text-slate-350 font-semibold'}`}>Subjects</Link>
+              <Link to="/exams" className={`px-2.5 py-1 rounded-lg ${activePath === '/exams' ? 'bg-primary-500 text-white font-extrabold shadow-sm' : 'text-slate-350 font-semibold'}`}>Exams</Link>
+              <Link to="/study" className={`px-2.5 py-1 rounded-lg ${activePath === '/study' ? 'bg-primary-500 text-white font-extrabold shadow-sm' : 'text-slate-350 font-semibold'}`}>Study</Link>
             </nav>
 
             {/* Notifications */}

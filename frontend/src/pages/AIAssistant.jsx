@@ -255,22 +255,22 @@ const AIAssistant = () => {
           </div>
 
           {/* ─── FIX 2: overflow-y-auto on sidebar list only ─── */}
-          <div className="space-y-1.5 overflow-y-auto flex-1 pr-1">
+          <div className="space-y-2 overflow-y-auto flex-1 pr-1">
             {chatHistory.map(hist => (
               <button
                 key={hist.id}
                 onClick={() => loadHistoryItem(hist)}
-                className={`w-full flex items-center justify-between text-left p-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                className={`w-full flex items-center justify-between text-left p-3 rounded-xl border transition-all cursor-pointer ${
                   activeHistoryId === hist.id
-                    ? 'bg-primary-500/10 border-primary-500/35 text-white'
-                    : 'bg-transparent border-transparent hover:bg-slate-800/40 text-slate-400 hover:text-slate-200'
+                    ? 'bg-gradient-to-r from-primary-500/20 to-purple-500/15 border-primary-400 text-white font-extrabold text-sm shadow-md scale-[1.02]'
+                    : 'bg-transparent border-transparent hover:bg-slate-800/40 text-slate-350 text-xs font-bold hover:text-white'
                 }`}
               >
                 <div className="flex items-center gap-2 truncate">
-                  <MessageSquare className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                  <MessageSquare className="w-4 h-4 text-purple-400 flex-shrink-0" />
                   <span className="truncate">{hist.title}</span>
                 </div>
-                <span className="text-[8px] bg-slate-800 px-1.5 py-0.5 rounded font-mono uppercase text-slate-500 flex-shrink-0 ml-1">
+                <span className="text-[9px] bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-md font-mono uppercase text-teal-400 font-bold flex-shrink-0 ml-1">
                   {hist.level}
                 </span>
               </button>

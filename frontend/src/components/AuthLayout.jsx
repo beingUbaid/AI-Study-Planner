@@ -1,5 +1,6 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
+import Logo from './Logo';
 
 const AuthLayout = () => {
   return (
@@ -10,11 +11,9 @@ const AuthLayout = () => {
       <div className="absolute -bottom-8 left-20 w-72 h-72 bg-blue-500 rounded-full mix-blend-multiply filter blur-2xl opacity-20 animate-blob animation-delay-4000"></div>
 
       <div className="w-full max-w-md relative z-10">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-purple-500 drop-shadow-sm">
-            AI Study Planner
-          </h1>
-          <p className="mt-2 text-slate-400 text-sm">Supercharge your learning journey</p>
+        <div className="flex flex-col items-center justify-center text-center mb-8">
+          <Logo size="lg" />
+          <p className="mt-3 text-slate-400 text-sm font-medium">Supercharge your learning journey</p>
         </div>
         
         {/* Glow wrapper */}

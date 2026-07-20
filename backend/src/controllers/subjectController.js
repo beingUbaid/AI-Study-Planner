@@ -1,4 +1,4 @@
-import Subject from "../models/Model.js";
+import Subject from "../models/Subject.js";
 
 // add subject
 

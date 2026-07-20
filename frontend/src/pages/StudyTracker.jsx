@@ -321,15 +321,15 @@ const StudyTracker = () => {
                 <p className="text-slate-400 text-xs mt-0.5">Toggle checkboxes to update dashboard completion progress.</p>
               </div>
 
-              <div className="flex items-center gap-1.5 overflow-x-auto">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
                 {["All", ...(subjects || []).map(s => s.name)].map(cat => (
                   <button
                     key={cat}
                     onClick={() => setSelectedCategoryFilter(cat)}
-                    className={`text-xs px-2.5 py-1.5 rounded-lg border font-semibold transition-all duration-200 cursor-pointer ${
+                    className={`px-3.5 py-2 rounded-xl border transition-all duration-200 cursor-pointer whitespace-nowrap ${
                       selectedCategoryFilter === cat
-                        ? 'bg-primary-500 border-primary-500 text-white shadow-sm'
-                        : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200'
+                        ? 'text-sm font-extrabold bg-gradient-to-r from-primary-500 to-teal-500 text-white shadow-lg border-teal-400 scale-105'
+                        : 'text-xs font-bold text-slate-350 bg-slate-800/80 border-slate-700 hover:text-white hover:bg-slate-750'
                     }`}
                   >
                     {cat}
@@ -466,15 +466,15 @@ const StudyTracker = () => {
               </div>
 
               {/* Pre-sets */}
-              <div className="flex gap-2 mt-6">
+              <div className="flex gap-2.5 mt-6">
                 {[15, 25, 45, 60].map(mins => (
                   <button
                     key={mins}
                     onClick={() => handleSetCustomTime(mins)}
-                    className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                    className={`px-3.5 py-2 rounded-xl border transition-all cursor-pointer ${
                       customMinutes === mins
-                        ? 'bg-purple-500 border-purple-500 text-white shadow-[0_0_10px_rgba(168,85,247,0.3)]'
-                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                        ? 'text-xs font-extrabold bg-purple-600 border-purple-400 text-white shadow-[0_0_15px_rgba(168,85,247,0.4)] scale-105'
+                        : 'text-xs font-bold bg-slate-800 border-slate-700 text-slate-350 hover:bg-slate-700 hover:text-white'
                     }`}
                   >
                     {mins}m

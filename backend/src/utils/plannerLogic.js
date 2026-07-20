@@ -67,7 +67,7 @@ export const generateSchedule = (subjects, dailyStudyHours, startDate) => {
 
     while (taskIndex < allTasks.length) {
       const task = allTasks[taskIndex]
-      if (hoursUsed + task.estimatedHours > dailyStudyHours) break
+      if (hoursUsed > 0 && hoursUsed + task.estimatedHours > dailyStudyHours) break
       dayTasks.push(task)
       hoursUsed += task.estimatedHours
       taskIndex++
