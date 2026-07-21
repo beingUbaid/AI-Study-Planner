@@ -56,6 +56,7 @@ export const plannerAPI = {
   getSchedule: () => request('/planner/schedule'),
   getToday: () => request('/planner/today'),
   markComplete: (body) => request('/planner/complete', 'PATCH', body),
+  rebalance: () => request('/planner/rebalance', 'POST'),
   exportICS: async () => {
     const token = getToken()
     const response = await fetch(`${BASE_URL}/planner/export-ics`, {

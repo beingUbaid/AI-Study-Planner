@@ -287,4 +287,104 @@ export const exportICS = async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message })
   }
-}
+}
+
+// ─────────────────────────────────────────
+// ADAPTIVE AI REBALANCE SCHEDULE (MISSED TASKS)
+// ─────────────────────────────────────────
+export const rebalancePlan = async (req, res) => {
+  try {
+    const studyPlan = await StudyPlan.findOne({ user: req.user.id })
+
+    if (!studyPlan || !studyPlan.schedule.length) {
+      return res.status(404).json({ message: 'No active study plan to rebalance' })
+    }
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const missedTasks = []
+
+    // 1. Collect uncompleted tasks from past days
+    studyPlan.schedule.forEach(day => {
+      const dayDate = new Date(day.date)
+      dayDate.setHours(0, 0, 0, 0)
+
+      if (dayDate < today) {
+        const uncompleted = day.tasks.filter(t => !t.isCompleted)
+        missedTasks.push(...uncompleted)
+        // Keep only completed tasks in past days
+        day.tasks = day.tasks.filter(t => t.isCompleted)
+        day.totalHours = day.tasks.reduce((sum, t) => sum + (t.estimatedHours || 1), 0)
+      }
+    })
+
+    if (missedTasks.length === 0) {
+      return res.status(200).json({
+        message: 'No missed tasks found! Your schedule is on track 🎉',
+        rescheduledCount: 0,
+        studyPlan
+      })
+    }
+
+    // 2. Redistribute missed tasks into today and future days
+    let missedIdx = 0
+    studyPlan.schedule.forEach(day => {
+      const dayDate = new Date(day.date)
+      dayDate.setHours(0, 0, 0, 0)
+
+      if (dayDate >= today && !day.isBreakDay && missedIdx < missedTasks.length) {
+        const currentHours = day.tasks.reduce((sum, t) => sum + (t.estimatedHours || 1), 0)
+        let availableHours = Math.max(0, studyPlan.dailyStudyHours - currentHours)
+
+        while (missedIdx < missedTasks.length && availableHours > 0) {
+          const taskToMove = missedTasks[missedIdx]
+          day.tasks.push(taskToMove)
+          availableHours -= (taskToMove.estimatedHours || 1)
+          missedIdx++
+        }
+
+        day.totalHours = day.tasks.reduce((sum, t) => sum + (t.estimatedHours || 1), 0)
+      }
+    })
+
+    // 3. If any missed tasks remain, append a new day at the end
+    if (missedIdx < missedTasks.length) {
+      const lastDay = studyPlan.schedule[studyPlan.schedule.length - 1]
+      const lastDate = new Date(lastDay.date)
+
+      while (missedIdx < missedTasks.length) {
+        lastDate.setDate(lastDate.getDate() + 1)
+        const newDayTasks = []
+        let hoursUsed = 0
+
+        while (missedIdx < missedTasks.length && hoursUsed < studyPlan.dailyStudyHours) {
+          const taskToMove = missedTasks[missedIdx]
+          newDayTasks.push(taskToMove)
+          hoursUsed += (taskToMove.estimatedHours || 1)
+          missedIdx++
+        }
+
+        studyPlan.schedule.push({
+          date: new Date(lastDate),
+          dayName: lastDate.toLocaleDateString('en-US', { weekday: 'long' }),
+          tasks: newDayTasks,
+          totalHours: hoursUsed,
+          isBreakDay: false
+        })
+      }
+    }
+
+    await studyPlan.save()
+
+    res.status(200).json({
+      message: `AI rebalanced schedule! ${missedTasks.length} missed task(s) rescheduled ✅`,
+      rescheduledCount: missedTasks.length,
+      studyPlan
+    })
+
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message })
+  }
+}
+

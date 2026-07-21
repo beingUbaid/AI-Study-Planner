@@ -10,7 +10,16 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-*.local
+# Environment variables and secrets
+.env
+.env.local
+*.env
+backend/.env
+frontend/.env
+
+# Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
 
 # Editor directories and files
 .vscode/*

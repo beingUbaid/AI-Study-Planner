@@ -539,6 +539,27 @@ const CalendarPlanner = () => {
 
             <div className="flex items-center gap-2 flex-wrap">
               <button
+                onClick={async () => {
+                  const { data, ok } = await plannerAPI.rebalance();
+                  if (ok) {
+                    alert(data.message || "AI schedule rebalanced successfully!");
+                    // refetch schedule
+                    const schedRes = await plannerAPI.getSchedule();
+                    if (schedRes.ok && schedRes.data.studyPlan) {
+                      setSchedule(schedRes.data.studyPlan.schedule);
+                    }
+                  } else {
+                    alert(data?.message || "No missed tasks to rebalance.");
+                  }
+                }}
+                className="px-3 py-1.5 rounded-xl bg-purple-600/20 border border-purple-500/40 hover:bg-purple-600/30 text-purple-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                title="AI automatically reschedules missed tasks into remaining study days"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                AI Rebalance
+              </button>
+
+              <button
                 onClick={() => plannerAPI.exportICS()}
                 className="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-750 text-slate-200 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
                 title="Export iCal (.ics) file for Google / Apple / Outlook Calendar"
