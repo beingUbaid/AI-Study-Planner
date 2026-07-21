@@ -230,3 +230,61 @@ export const markTaskComplete = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message })
   }
 }
+
+// ─────────────────────────────────────────
+// EXPORT ICS (iCALENDAR FILE FOR GOOGLE CALENDAR)
+// ─────────────────────────────────────────
+export const exportICS = async (req, res) => {
+  try {
+    const studyPlan = await StudyPlan.findOne({ user: req.user.id })
+
+    if (!studyPlan || !studyPlan.schedule.length) {
+      return res.status(404).json({ message: 'No study plan schedule found to export' })
+    }
+
+    const formatICSDate = (dateObj) => {
+      const d = new Date(dateObj)
+      return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
+    }
+
+    let icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//AI Study Planner//NONSGML v1.0//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'X-WR-CALNAME:AI Study Schedule'
+    ]
+
+    studyPlan.schedule.forEach((day, dIdx) => {
+      day.tasks.forEach((t, tIdx) => {
+        const start = new Date(day.date)
+        start.setHours(9 + (tIdx * 2), 0, 0, 0)
+        const end = new Date(start)
+        end.setHours(start.getHours() + (t.estimatedHours || 1))
+
+        icsContent.push(
+          'BEGIN:VEVENT',
+          `UID:study-task-${dIdx}-${tIdx}-${Date.now()}@studyplanner.ai`,
+          `DTSTAMP:${formatICSDate(new Date())}`,
+          `DTSTART:${formatICSDate(start)}`,
+          `DTEND:${formatICSDate(end)}`,
+          `SUMMARY:${t.subjectName || 'Study'}: ${t.chapterName || 'Session'}`,
+          `DESCRIPTION:AI Study Planner Task. Subject: ${t.subjectName || 'General'}, Estimated: ${t.estimatedHours || 1} hour(s)`,
+          'STATUS:CONFIRMED',
+          'END:VEVENT'
+        )
+      })
+    })
+
+    icsContent.push('END:VCALENDAR')
+    const finalFile = icsContent.join('\r\n')
+
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8')
+    res.setHeader('Content-Disposition', 'attachment; filename="study_schedule.ics"')
+    res.send(finalFile)
+
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message })
+  }
+}

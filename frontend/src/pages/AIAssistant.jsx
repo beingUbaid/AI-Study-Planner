@@ -2,17 +2,20 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
   Brain, Send, MessageSquare, History, Video, Play,
-  GraduationCap, Cpu, ChevronRight, Loader2
+  GraduationCap, Cpu, ChevronRight, Loader2, Layers
 } from 'lucide-react';
 import { aiAPI } from '../services/api';
+import VoiceInputButton from '../components/VoiceInputButton';
+import FlashcardsQuizModal from '../components/FlashcardsQuizModal';
 
 const STORAGE_KEY = 'ai_chat_messages';
 const HISTORY_KEY = 'ai_chat_history';
 
 const AIAssistant = () => {
-  const { subjects } = useOutletContext();
+  const { subjects, setNotifications } = useOutletContext();
   const [academicLevel, setAcademicLevel] = useState("BS");
   const [selectedSubject, setSelectedSubject] = useState("Math");
+  const [showLearningModal, setShowLearningModal] = useState(false);
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
 
@@ -334,6 +337,14 @@ const AIAssistant = () => {
             </select>
 
             <button
+              onClick={() => setShowLearningModal(true)}
+              className="text-xs bg-gradient-to-r from-primary-500 to-purple-600 hover:from-primary-600 hover:to-purple-700 text-white font-extrabold cursor-pointer px-3 py-1.5 rounded-lg transition-all shadow-md flex items-center gap-1.5"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              Flashcards & Quiz
+            </button>
+
+            <button
               onClick={handleClearChat}
               className="text-[10px] text-slate-500 hover:text-red-400 font-semibold cursor-pointer border border-slate-700 px-2 py-1.5 rounded-lg hover:border-red-500/30 transition-all"
             >
@@ -461,13 +472,19 @@ const AIAssistant = () => {
             ))}
           </div>
 
-          <form onSubmit={handleSend} className="flex gap-3">
+          <form onSubmit={handleSend} className="flex gap-2.5">
             <input
               type="text"
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
               placeholder={`Ask about ${selectedSubject} (${academicLevel} level)...`}
               className="flex-1 bg-dark-900 border border-slate-700 px-4 py-3 rounded-xl text-xs font-semibold focus:border-primary-500 outline-none text-slate-100"
+            />
+            <VoiceInputButton
+              onTranscript={(text) => {
+                setInputVal(text);
+                handleSend(null, text);
+              }}
             />
             <button
               type="submit"
@@ -480,6 +497,21 @@ const AIAssistant = () => {
           </form>
         </div>
       </div>
+
+      <FlashcardsQuizModal
+        isOpen={showLearningModal}
+        onClose={() => setShowLearningModal(false)}
+        subjects={subjects}
+        onQuizCompleted={(score) => {
+          if (setNotifications) {
+            setNotifications(prev => [{
+              id: Date.now(),
+              text: `🎯 Quiz Completed! Score: ${score}% (${selectedSubject})`,
+              read: false
+            }, ...prev]);
+          }
+        }}
+      />
     </div>
   );
 };

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { subjectsAPI, dashboardAPI, analyticsAPI } from '../services/api';
 import Logo from './Logo';
+import VoiceInputButton from './VoiceInputButton';
 
 const DashboardLayout = () => {
   const navigate = useNavigate();
@@ -647,6 +648,12 @@ const DashboardLayout = () => {
                 onChange={(e) => setChatInput(e.target.value)}
                 placeholder="Ask about equations, tasks, schedules..."
                 className="flex-1 bg-dark-900 border border-slate-700 px-3.5 py-2.5 rounded-xl text-xs font-semibold focus:border-primary-500 outline-none text-slate-100"
+              />
+              <VoiceInputButton
+                onTranscript={(text) => {
+                  setChatInput(text);
+                  handleSendMessage(null, text);
+                }}
               />
               <button
                 type="submit"

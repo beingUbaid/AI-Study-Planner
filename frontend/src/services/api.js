@@ -55,7 +55,22 @@ export const plannerAPI = {
   generate: (body) => request('/planner/generate', 'POST', body),
   getSchedule: () => request('/planner/schedule'),
   getToday: () => request('/planner/today'),
-  markComplete: (body) => request('/planner/complete', 'PATCH', body)
+  markComplete: (body) => request('/planner/complete', 'PATCH', body),
+  exportICS: async () => {
+    const token = getToken()
+    const response = await fetch(`${BASE_URL}/planner/export-ics`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    if (!response.ok) return { ok: false }
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'study_schedule.ics'
+    a.click()
+    window.URL.revokeObjectURL(url)
+    return { ok: true }
+  }
 }
 
 // ─── DASHBOARD ──────────────────────────
@@ -68,6 +83,8 @@ export const dashboardAPI = {
 export const aiAPI = {
   chat: (body) => request('/ai/chat', 'POST', body),
   generateSchedule: (body) => request('/ai/generate-schedule', 'POST', body),
+  generateFlashcards: (body) => request('/ai/generate-flashcards', 'POST', body),
+  generateQuiz: (body) => request('/ai/generate-quiz', 'POST', body),
   uploadPDF: async (formData) => {
     const token = getToken()
     const response = await fetch(`${BASE_URL}/ai/upload-pdf`, {

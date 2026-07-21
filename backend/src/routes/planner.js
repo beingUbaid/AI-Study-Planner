@@ -5,7 +5,8 @@ import {
   generatePlan,
   getSchedule,
   getTodayTasks,
-  markTaskComplete
+  markTaskComplete,
+  exportICS
 } from '../controllers/plannerController.js'
 import authMiddleware from '../middleware/authMiddleware.js'
 
@@ -19,5 +20,6 @@ router.post('/generate', generatePlan)
 router.get('/schedule', getSchedule)
 router.get('/today', getTodayTasks)
 router.patch('/complete', markTaskComplete)
+router.get('/export-ics', exportICS)
 
-export default router
+export default router

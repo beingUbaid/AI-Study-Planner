@@ -272,3 +272,101 @@ export const uploadPDF = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message })
   }
 }
+
+// ─────────────────────────────────────────
+// 4. AI FLASHCARD GENERATOR
+// ─────────────────────────────────────────
+export const aiGenerateFlashcards = async (req, res) => {
+  try {
+    const { subject = 'General', topic = 'Core Concepts', count = 5 } = req.body
+
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert academic tutor.
+          Generate high-yield active-recall study flashcards.
+          Return ONLY a JSON array, like this:
+          [
+            { "id": 1, "front": "Clear Question/Prompt?", "back": "Concise high-yield answer.", "category": "${subject}" }
+          ]
+          Rules:
+          - Generate exactly ${count} flashcards.
+          - Return ONLY valid JSON array. No explanations or extra text.`
+        },
+        {
+          role: 'user',
+          content: `Create flashcards for Subject: ${subject}, Topic: ${topic}`
+        }
+      ],
+      max_tokens: 1200
+    })
+
+    const responseText = completion.choices[0].message.content
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/)
+    const flashcards = jsonMatch ? JSON.parse(jsonMatch[0]) : []
+
+    res.status(200).json({
+      message: 'Flashcards generated ✅',
+      subject,
+      topic,
+      flashcards
+    })
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message })
+  }
+}
+
+// ─────────────────────────────────────────
+// 5. AI INTERACTIVE PRACTICE QUIZ GENERATOR
+// ─────────────────────────────────────────
+export const aiGenerateQuiz = async (req, res) => {
+  try {
+    const { subject = 'General', topic = 'Core Concepts', difficulty = 'Medium', count = 4 } = req.body
+
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert academic examiner.
+          Generate multiple-choice practice quiz questions.
+          Return ONLY a JSON array, like this:
+          [
+            {
+              "id": 1,
+              "question": "Clear exam question?",
+              "options": ["Option A", "Option B", "Option C", "Option D"],
+              "correctAnswer": 0,
+              "explanation": "Detailed step-by-step breakdown why option A is correct."
+            }
+          ]
+          Rules:
+          - Generate exactly ${count} questions.
+          - "correctAnswer" must be the 0-based integer index of the right option (0, 1, 2, or 3).
+          - Difficulty level: ${difficulty}.
+          - Return ONLY valid JSON array. No markdown formatting around the JSON.`
+        },
+        {
+          role: 'user',
+          content: `Create a practice quiz for Subject: ${subject}, Topic: ${topic}, Difficulty: ${difficulty}`
+        }
+      ],
+      max_tokens: 1500
+    })
+
+    const responseText = completion.choices[0].message.content
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/)
+    const quiz = jsonMatch ? JSON.parse(jsonMatch[0]) : []
+
+    res.status(200).json({
+      message: 'Quiz generated ✅',
+      subject,
+      topic,
+      quiz
+    })
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message })
+  }
+}

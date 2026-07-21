@@ -3,7 +3,9 @@ import multer from 'multer'
 import {
   aiGenerateSchedule,
   aiChat,
-  uploadPDF
+  uploadPDF,
+  aiGenerateFlashcards,
+  aiGenerateQuiz
 } from '../controllers/aiController.js'
 import authMiddleware from '../middleware/authMiddleware.js'
 
@@ -33,5 +35,7 @@ router.use(authMiddleware)
 router.post('/generate-schedule', aiGenerateSchedule)
 router.post('/chat', aiChat)
 router.post('/upload-pdf', upload.single('file'), uploadPDF)
+router.post('/generate-flashcards', aiGenerateFlashcards)
+router.post('/generate-quiz', aiGenerateQuiz)
 
-export default router
+export default router
