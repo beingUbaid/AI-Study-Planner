@@ -4,16 +4,18 @@ export const generateSchedule = (subjects, dailyStudyHours, startDate) => {
   const schedule = []
   const currentDate = new Date(startDate)
 
-  const sortedSubjects = [...subjects].sort((a, b) =>
-    new Date(a.examDate) - new Date(b.examDate)
-  )
+  const sortedSubjects = [...subjects].sort((a, b) => {
+    const dateA = a.examDate ? new Date(a.examDate).getTime() : Infinity
+    const dateB = b.examDate ? new Date(b.examDate).getTime() : Infinity
+    return dateA - dateB
+  })
 
   const allTasks = []
 
   for (const subject of sortedSubjects) {
-    const examDate = new Date(subject.examDate)
+    const examDate = subject.examDate ? new Date(subject.examDate) : null
     const today = new Date(startDate)
-    const daysUntilExam = Math.ceil((examDate - today) / (1000 * 60 * 60 * 24))
+    const daysUntilExam = examDate ? Math.ceil((examDate - today) / (1000 * 60 * 60 * 24)) : null
 
     for (const chapter of subject.chapters) {
       allTasks.push({

@@ -29,13 +29,15 @@ const Exams = () => {
     General: "bg-slate-500/10 text-slate-400 border border-slate-700",
   };
 
-  // Helper: Calculate Days Remaining from standard reference date (2026-06-23)
+  // Helper: Calculate Days Remaining from current date
   const getDaysRemaining = (examDateStr) => {
-    const today = new Date("2026-06-23");
+    if (!examDateStr) return 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const examDate = new Date(examDateStr);
+    examDate.setHours(0, 0, 0, 0);
     const difference = examDate.getTime() - today.getTime();
-    const days = Math.ceil(difference / (1000 * 3600 * 24));
-    return days;
+    return Math.ceil(difference / (1000 * 3600 * 24));
   };
 
   // Form submit handler

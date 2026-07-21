@@ -32,9 +32,9 @@ export const getProgress = async (req, res) => {
         .reduce((sum, t) => sum + t.estimatedHours, 0)
 
       // days until exam
-      const daysRemaining = Math.ceil(
-        (new Date(subject.examDate) - new Date()) / (1000 * 60 * 60 * 24)
-      )
+      const daysRemaining = subject.examDate
+        ? Math.ceil((new Date(subject.examDate) - new Date()) / (1000 * 60 * 60 * 24))
+        : null
 
       return {
         subjectId: subject._id,
