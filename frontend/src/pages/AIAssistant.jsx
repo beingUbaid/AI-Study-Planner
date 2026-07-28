@@ -331,6 +331,33 @@ const AIAssistant = () => {
                   <div className="whitespace-pre-line font-medium leading-relaxed">
                     {msg.text}
                   </div>
+
+                  {msg.lectures && msg.lectures.length > 0 && (
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-800/80">
+                      {msg.lectures.map(video => (
+                        <button
+                          key={video.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveVideoId(video.id);
+                            setActiveVideoTitle(video.title);
+                          }}
+                          className="flex items-center gap-3 text-left p-2 rounded-xl bg-slate-950/40 hover:bg-slate-950 border border-slate-850 hover:border-slate-700 transition-all cursor-pointer group text-[10px]"
+                        >
+                          <div className="relative w-16 aspect-video rounded-lg overflow-hidden flex-shrink-0 bg-slate-900">
+                            <img src={video.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt="" />
+                            <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                              <Play className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />
+                            </div>
+                          </div>
+                          <div className="truncate flex-1 space-y-0.5">
+                            <span className="font-extrabold text-slate-200 block truncate group-hover:text-primary-400">{video.title}</span>
+                            <span className="text-slate-500 block">{video.author} • {video.duration}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
