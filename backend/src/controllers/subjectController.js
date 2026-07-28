@@ -116,3 +116,42 @@ export const deleteSubject = async (req,res) => {
     res.status(500).json({ message: 'Server error', error: error.message })
   }
 }
+
+// Log quiz performance
+export const logQuizScore = async (req, res) => {
+  try {
+    const { score, topic, difficulty } = req.body;
+    const lookupId = req.params.id;
+
+    // Build flexible query for ID or subject name
+    const query = { user: req.user.id };
+    if (lookupId.match(/^[0-9a-fA-F]{24}$/)) {
+      query._id = lookupId;
+    } else {
+      query.name = new RegExp(`^${lookupId.trim()}$`, 'i');
+    }
+
+    const subject = await Subject.findOne(query);
+
+    if (!subject) {
+      return res.status(404).json({ message: "Subject not found" });
+    }
+
+    subject.quizPerformance = subject.quizPerformance || [];
+    subject.quizPerformance.push({
+      date: new Date(),
+      topic: topic || "Practice Quiz",
+      score: score !== undefined ? score : 0,
+      difficulty: difficulty || "Medium"
+    });
+
+    await subject.save();
+
+    res.status(200).json({
+      message: "Quiz performance logged successfully ✅",
+      subject
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};

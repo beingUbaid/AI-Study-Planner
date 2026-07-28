@@ -193,12 +193,23 @@ const Dashboard = () => {
         setActivePlan(data.studyPlan);
         setRebalanceResult({
           isOpen: true,
-          title: "Plan Updated Automatically",
+          title: "AI Plan Updated",
           explanation: data.explanation || "Your unfinished study tasks have been redistributed across future days."
+        });
+      } else {
+        setRebalanceResult({
+          isOpen: true,
+          title: "AI Service Offline",
+          explanation: "AI service is temporarily unavailable. Please try again."
         });
       }
     } catch (err) {
       console.error("Dashboard rebalance failed:", err);
+      setRebalanceResult({
+        isOpen: true,
+        title: "AI Service Offline",
+        explanation: "AI service is temporarily unavailable. Please try again."
+      });
     } finally {
       setLoadingPlan(false);
     }

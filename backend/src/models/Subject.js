@@ -27,7 +27,16 @@ const SubjectSchema = new mongoose.Schema({
   color: {
     type: String,
     default: '#667eea'
-  }
+  },
+  quizPerformance: [{
+    date: {
+      type: Date,
+      default: Date.now
+    },
+    topic: String,
+    score: Number,
+    difficulty: String
+  }]
 }, { timestamps: true })
 
 export default mongoose.models.Subject || mongoose.model("Subject", SubjectSchema);

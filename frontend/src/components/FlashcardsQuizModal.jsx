@@ -113,9 +113,34 @@ const FlashcardsQuizModal = ({ isOpen, onClose, subjects = [], onQuizCompleted }
     return Math.round((correct / quiz.length) * 100);
   };
 
-  const handleFinishQuiz = () => {
+  const handleFinishQuiz = async () => {
     setQuizSubmitted(true);
     const score = getQuizScore();
+
+    // Log to backend DB so that it dynamically adapts
+    try {
+      const subjObj = subjects.find(s => s.name === selectedSubject);
+      const lookupId = subjObj ? (subjObj.id || subjObj._id) : selectedSubject;
+      
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/subjects/${lookupId}/quiz`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          score,
+          topic: topicInput || "Practice Quiz",
+          difficulty
+        })
+      });
+      if (!response.ok) {
+        console.warn("Could not save quiz performance to backend database");
+      }
+    } catch (err) {
+      console.warn("Failed to contact backend for quiz score tracking:", err);
+    }
+
     if (onQuizCompleted) {
       onQuizCompleted(score);
     }

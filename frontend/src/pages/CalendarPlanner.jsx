@@ -347,7 +347,7 @@ const CalendarPlanner = () => {
 
     } catch (err) {
       console.warn('Error generating schedule:', err)
-      setFormError('Something went wrong. Please try again.')
+      setFormError('AI service is temporarily unavailable. Please try again.')
     } finally {
       clearTimeout(t1)
       clearTimeout(t2)
@@ -614,7 +614,7 @@ const CalendarPlanner = () => {
                 {isGenerating ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Planning Schedule...
+                    <span>{progressiveLoadText}</span>
                   </>
                 ) : (
                   <>

@@ -58,6 +58,7 @@ const AIAssistant = () => {
   const [activeHistoryId, setActiveHistoryId] = useState(null);
   const [activeVideoId, setActiveVideoId] = useState(null);
   const [activeVideoTitle, setActiveVideoTitle] = useState("");
+  const [assistantLoadingText, setAssistantLoadingText] = useState("AI is thinking...");
 
   // Save messages to localStorage
   useEffect(() => {
@@ -100,6 +101,10 @@ const AIAssistant = () => {
     setMessages(prev => [...prev, newMsgUser]);
     setInputVal('');
     setIsStreaming(true);
+    setAssistantLoadingText("Analyzing study query...");
+    const ast1 = setTimeout(() => setAssistantLoadingText("Consulting study guides..."), 1000);
+    const ast2 = setTimeout(() => setAssistantLoadingText("Synthesizing explanation..."), 2200);
+    const ast3 = setTimeout(() => setAssistantLoadingText("Formatting lecture references..."), 3500);
 
     try {
       const { data, ok } = await aiAPI.chat({
@@ -154,6 +159,9 @@ const AIAssistant = () => {
         level: academicLevel
       }]);
     } finally {
+      if (typeof ast1 !== 'undefined') clearTimeout(ast1);
+      if (typeof ast2 !== 'undefined') clearTimeout(ast2);
+      if (typeof ast3 !== 'undefined') clearTimeout(ast3);
       setIsStreaming(false);
     }
   };
@@ -332,7 +340,7 @@ const AIAssistant = () => {
             <div className="flex justify-start">
               <div className="bg-slate-900/60 border border-slate-800 text-slate-400 p-4 rounded-2xl rounded-tl-none text-xs flex items-center gap-2">
                 <Loader2 className="w-4 h-4 text-primary-400 animate-spin" />
-                <span>AI is thinking...</span>
+                <span>{assistantLoadingText}</span>
               </div>
             </div>
           )}

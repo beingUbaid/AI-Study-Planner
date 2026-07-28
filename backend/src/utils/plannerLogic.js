@@ -4,10 +4,29 @@ export const generateSchedule = (subjects, dailyStudyHours, startDate) => {
   const schedule = []
   const currentDate = new Date(startDate)
 
+  // Calculate average quiz score and priority weights
+  const getAverageQuizScore = (subj) => {
+    if (!subj.quizPerformance || subj.quizPerformance.length === 0) return null;
+    const total = subj.quizPerformance.reduce((sum, q) => sum + q.score, 0);
+    return total / subj.quizPerformance.length;
+  };
+
   const sortedSubjects = [...subjects].sort((a, b) => {
-    const dateA = a.examDate ? new Date(a.examDate).getTime() : Infinity
-    const dateB = b.examDate ? new Date(b.examDate).getTime() : Infinity
-    return dateA - dateB
+    const avgA = getAverageQuizScore(a);
+    const avgB = getAverageQuizScore(b);
+
+    let dateWeightA = a.examDate ? new Date(a.examDate).getTime() : Infinity;
+    let dateWeightB = b.examDate ? new Date(b.examDate).getTime() : Infinity;
+
+    // Prioritize weak subjects (quiz score < 70) by pulling date weight closer (3 days)
+    if (avgA !== null && avgA < 70) dateWeightA -= 3 * 24 * 60 * 60 * 1000;
+    if (avgB !== null && avgB < 70) dateWeightB -= 3 * 24 * 60 * 60 * 1000;
+
+    // Deprioritize mastered subjects (quiz score >= 85) by pushing date weight later
+    if (avgA !== null && avgA >= 85) dateWeightA += 3 * 24 * 60 * 60 * 1000;
+    if (avgB !== null && avgB >= 85) dateWeightB += 3 * 24 * 60 * 60 * 1000;
+
+    return dateWeightA - dateWeightB;
   })
 
   const allTasks = []
@@ -17,30 +36,42 @@ export const generateSchedule = (subjects, dailyStudyHours, startDate) => {
     const today = new Date(startDate)
     const daysUntilExam = examDate ? Math.ceil((examDate - today) / (1000 * 60 * 60 * 24)) : null
 
+    const avgScore = getAverageQuizScore(subject);
+    const isMastered = avgScore !== null && avgScore >= 85;
+
     for (const chapter of subject.chapters) {
+      // Scale down estimated hours for mastered subjects to avoid repetition overload
+      let hours = chapter.estimatedHours || 1;
+      if (isMastered) {
+        hours = Math.max(1, Math.round(hours * 0.5));
+      }
+
       allTasks.push({
         subject: subject.subjectId,
         subjectName: subject.name,
         subjectColor: subject.color,
         chapter: chapter._id,
         chapterName: chapter.name,
-        estimatedHours: chapter.estimatedHours || 1,
+        estimatedHours: hours,
         isRevision: false,
         examDate,
         daysUntilExam
       })
     }
 
-    allTasks.push({
-      subject: subject.subjectId,
-      subjectName: subject.name,
-      subjectColor: subject.color,
-      chapterName: `Revision — ${subject.name}`,
-      estimatedHours: 1.5,
-      isRevision: true,
-      examDate,
-      daysUntilExam
-    })
+    // Skip adding standard revision block if subject is mastered
+    if (!isMastered) {
+      allTasks.push({
+        subject: subject.subjectId,
+        subjectName: subject.name,
+        subjectColor: subject.color,
+        chapterName: `Revision — ${subject.name}`,
+        estimatedHours: 1.5,
+        isRevision: true,
+        examDate,
+        daysUntilExam
+      })
+    }
   }
 
   let taskIndex = 0

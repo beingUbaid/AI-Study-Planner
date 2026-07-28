@@ -36,7 +36,22 @@ export const rebalanceStudyPlan = (studyPlan, today) => {
 
     if (dayDate >= today && !day.isBreakDay && missedIdx < missedTasks.length) {
       const currentHours = day.tasks.reduce((sum, t) => sum + (t.estimatedHours || 1), 0)
-      let availableHours = Math.max(0, studyPlan.dailyStudyHours - currentHours)
+      
+      // Determine dynamic limit:
+      // If the upcoming task has an examDate and it's within 2 days of this day, allow up to 8 hours
+      const nextTask = missedTasks[missedIdx];
+      const examDate = nextTask.examDate ? new Date(nextTask.examDate) : null;
+      let dailyLimit = studyPlan.dailyStudyHours || 4;
+      
+      if (examDate) {
+        examDate.setHours(0, 0, 0, 0);
+        const daysToExam = Math.ceil((examDate - dayDate) / (1000 * 60 * 60 * 24));
+        if (daysToExam <= 2 && daysToExam >= 0) {
+          dailyLimit = 8; // Compressed high-intensity study limit
+        }
+      }
+
+      let availableHours = Math.max(0, dailyLimit - currentHours)
 
       while (missedIdx < missedTasks.length && availableHours > 0) {
         const taskToMove = missedTasks[missedIdx]

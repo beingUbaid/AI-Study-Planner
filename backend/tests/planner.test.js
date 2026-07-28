@@ -106,6 +106,94 @@ try {
   assert.ok(futureTasks.some(t => t.chapterName === 'Missed Chap'), 'Missed task should be rescheduled to future days')
   console.log('✅ Test Case 4 Passed: Missed study rebalancing')
 
+  // Test Case 5: Mastery-based hour scaling and revision exclusion
+  const masteredSubject = {
+    subjectId: 'mastered-id',
+    name: 'Mastered Course',
+    color: '#00ff00',
+    examDate: new Date(2026, 6, 30),
+    quizPerformance: [{ score: 90 }],
+    chapters: [
+      { _id: 'chap-1', name: 'Mastered Chap 1', estimatedHours: 4 }
+    ]
+  };
+
+  const scheduleMastered = generateSchedule([masteredSubject], 4, new Date(2026, 6, 28));
+  const masteredTasks = scheduleMastered.flatMap(d => d.tasks);
+  // Mastered Chap 1 should be scaled from 4 hours to 2 hours (4 * 0.5)
+  assert.strictEqual(masteredTasks[0].estimatedHours, 2, 'Mastered subject chapters should have durations scaled down');
+  // It should NOT contain any Revision task
+  assert.ok(!masteredTasks.some(t => t.isRevision), 'Mastered subjects should skip the standard revision task');
+  console.log('✅ Test Case 5 Passed: Mastered subject hour scaling & revision exclusion')
+
+  // Test Case 6: Weak subject scheduling prioritization
+  const normalSubject = {
+    subjectId: 'normal-id',
+    name: 'Normal Course',
+    color: '#0000ff',
+    examDate: new Date(2026, 6, 29), // Exam tomorrow
+    quizPerformance: [],
+    chapters: [
+      { _id: 'chap-2', name: 'Normal Chap 1', estimatedHours: 2 }
+    ]
+  };
+
+  const weakSubject = {
+    subjectId: 'weak-id',
+    name: 'Weak Course',
+    color: '#ff0000',
+    examDate: new Date(2026, 6, 30), // Exam day after tomorrow
+    quizPerformance: [{ score: 50 }], // Poor score
+    chapters: [
+      { _id: 'chap-3', name: 'Weak Chap 1', estimatedHours: 2 }
+    ]
+  };
+
+  // Even though weakSubject has a later exam date, it should be scheduled first because it is weak!
+  const schedulePrioritized = generateSchedule([normalSubject, weakSubject], 4, new Date(2026, 6, 28));
+  const prioritizedTasks = schedulePrioritized.flatMap(d => d.tasks);
+  assert.strictEqual(prioritizedTasks[0].subjectName, 'Weak Course', 'Weak subjects should be prioritized in schedule order');
+  console.log('✅ Test Case 6 Passed: Weak subject scheduling prioritization')
+
+  // Test Case 7: Compressed schedule when only 2 days remaining before exam
+  const examDateNear = new Date(2026, 6, 30); // 2 days from today (2026-07-28)
+  const nearSchedule = [
+    {
+      date: new Date(2026, 6, 27), // Past
+      dayName: 'Monday',
+      isBreakDay: false,
+      tasks: [
+        { chapterName: 'Missed Chapter 1', estimatedHours: 2, isCompleted: false, examDate: examDateNear },
+        { chapterName: 'Missed Chapter 2', estimatedHours: 2, isCompleted: false, examDate: examDateNear }
+      ]
+    },
+    {
+      date: new Date(2026, 6, 28), // Today (2 days to exam)
+      dayName: 'Tuesday',
+      isBreakDay: false,
+      tasks: []
+    },
+    {
+      date: new Date(2026, 6, 29), // Tomorrow (1 day to exam)
+      dayName: 'Wednesday',
+      isBreakDay: false,
+      tasks: []
+    }
+  ];
+
+  const nearPlan = {
+    dailyStudyHours: 2, // Standard daily study limit is small
+    schedule: nearSchedule
+  };
+
+  const rebalanceResultNear = rebalanceStudyPlan(nearPlan, new Date(2026, 6, 28));
+  // Standard daily limit is 2. But since exam is in 2 days, it should compress and put both missed tasks (total 4 hours) into today and tomorrow (increasing hours to fit them, rather than extending past the exam date!)
+  // Check if any day date is past the exam date 2026-07-30
+  const datesPastExam = nearPlan.schedule.some(day => new Date(day.date) > examDateNear);
+  assert.ok(!datesPastExam, 'Should not schedule tasks past the exam date when compressing');
+  assert.ok(nearPlan.schedule[1].tasks.length > 0, 'Missed tasks should be redistributed into remaining days');
+  console.log('✅ Test Case 7 Passed: Compressed schedule when 2 days remaining')
+
   console.log('\n🎉 ALL SCHEDULER UNIT TESTS PASSED SUCCESSFULLY! 🎉')
   process.exit(0)
 

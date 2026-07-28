@@ -3,7 +3,8 @@ import {
   addSubject,
   getSubjects,
   updateSubject,
-  deleteSubject
+  deleteSubject,
+  logQuizScore
 } from '../controllers/subjectController.js'
 import authMiddleware from '../middleware/authMiddleware.js'
 
@@ -16,5 +17,6 @@ router.post('/', addSubject)
 router.get('/', getSubjects)
 router.put('/:id', updateSubject)
 router.delete('/:id', deleteSubject)
+router.post('/:id/quiz', logQuizScore)
 
 export default router
