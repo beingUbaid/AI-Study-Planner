@@ -52,7 +52,15 @@ const StudyPlanSchema = new mongoose.Schema({
   aiExplanation: {
     type: String,
     default: ''
-  }
+  },
+  rebalanceLogs: [{
+    date: {
+      type: Date,
+      default: Date.now
+    },
+    trigger: String,
+    explanation: String
+  }]
 }, { timestamps: true })
 
 export default mongoose.model('StudyPlan', StudyPlanSchema)

@@ -12,7 +12,8 @@ import {
   Info,
   CalendarDays,
   Download,
-  ExternalLink
+  ExternalLink,
+  BrainCircuit
 } from 'lucide-react';
 import { plannerAPI, aiAPI } from '../services/api';
 
@@ -38,6 +39,7 @@ const CalendarPlanner = () => {
   const [aiExplanation, setAiExplanation] = useState("")
   const [progressiveLoadText, setProgressiveLoadText] = useState("🧠 Analyzing syllabus...")
   const [rebalanceResult, setRebalanceResult] = useState({ isOpen: false, title: "", message: "", explanation: "" })
+  const [rebalanceLogs, setRebalanceLogs] = useState([])
 
   // PDF Upload State
   const [isDragging, setIsDragging] = useState(false)
@@ -127,6 +129,7 @@ const CalendarPlanner = () => {
         const { data, ok } = await plannerAPI.getSchedule()
         if (ok && data?.studyPlan) {
           setAiExplanation(data.studyPlan.aiExplanation || "")
+          setRebalanceLogs(data.studyPlan.rebalanceLogs || [])
           loadEventsFromSchedule(data.studyPlan.schedule || [])
         } else {
           const savedEvents = localStorage.getItem('study_calendar_events')
@@ -644,6 +647,7 @@ const CalendarPlanner = () => {
                     // Update events using the helper we'll define
                     loadEventsFromSchedule(data.studyPlan.schedule);
                     setAiExplanation(data.studyPlan.aiExplanation || "");
+                    setRebalanceLogs(data.studyPlan.rebalanceLogs || []);
                     setRebalanceResult({
                       isOpen: true,
                       title: "Plan Updated Successfully",
@@ -898,6 +902,39 @@ const CalendarPlanner = () => {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* AI Adaptation & Rebalance Logs Timeline */}
+          {rebalanceLogs && rebalanceLogs.length > 0 && (
+            <div className="glass-panel p-6 rounded-2xl border border-white/5 bg-gradient-to-br from-dark-900 via-[#10192e]/5 to-dark-900 shadow-xl space-y-4">
+              <h3 className="text-base font-extrabold text-white flex items-center gap-2 pb-2 border-b border-slate-850">
+                <BrainCircuit className="w-5 h-5 text-teal-400 animate-pulse" />
+                🤖 AI Planner Adaptation History
+              </h3>
+              <div className="space-y-4 text-xs max-h-[320px] overflow-y-auto pr-1">
+                {rebalanceLogs.slice().reverse().map((log, idx) => (
+                  <div key={log._id || idx} className="relative pl-6 border-l border-slate-800/80 last:border-l-0 pb-4 last:pb-0">
+                    {/* Glowing Timeline Node */}
+                    <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.6)]"></div>
+                    
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-[10px] text-slate-500 font-semibold font-mono">
+                        <span>{new Date(log.date).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className="text-teal-400 uppercase tracking-wider font-bold">REBALANCED</span>
+                      </div>
+                      
+                      <p className="text-xs font-black text-slate-200">
+                        {log.trigger}
+                      </p>
+                      
+                      <p className="text-[11px] text-slate-405 leading-relaxed bg-slate-900/30 border border-slate-850 p-2.5 rounded-lg mt-1 italic">
+                        "{log.explanation}"
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

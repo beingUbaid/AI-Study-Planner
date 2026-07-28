@@ -166,6 +166,13 @@ export const aiChat = async (req, res) => {
         const result = rebalanceStudyPlan(studyPlan, today)
         rescheduledCount = result.rescheduledCount
         if (rescheduledCount > 0) {
+          const logItem = {
+            date: new Date(),
+            trigger: `Chatbot request: "${message.length > 50 ? message.substring(0, 50) + '...' : message}"`,
+            explanation: aiResponse
+          }
+          studyPlan.rebalanceLogs = studyPlan.rebalanceLogs || []
+          studyPlan.rebalanceLogs.push(logItem)
           await studyPlan.save()
           rebalanced = true
         }

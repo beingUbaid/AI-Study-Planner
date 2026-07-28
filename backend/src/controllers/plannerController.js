@@ -357,8 +357,6 @@ export const rebalancePlan = async (req, res) => {
       })
     }
 
-    await studyPlan.save()
-
     // Generate AI explanation for rebalance
     let explanation = ''
     try {
@@ -389,6 +387,17 @@ export const rebalancePlan = async (req, res) => {
       console.error('Groq Rebalance Explanation failed, using fallback:', err.message)
       explanation = `Your plan has been updated! I redistributed ${rescheduledCount} unfinished task(s) across the upcoming days without increasing your study workload past the ${studyPlan.dailyStudyHours} hours/day limit.`
     }
+
+    // Append Log
+    const logItem = {
+      date: new Date(),
+      trigger: `Manual rebalance triggered. Missed study blocks: ${missedTasks.slice(0, 2).map(t => t.subjectName).join(', ')}${missedTasks.length > 2 ? ' and others' : ''}`,
+      explanation
+    }
+    studyPlan.rebalanceLogs = studyPlan.rebalanceLogs || []
+    studyPlan.rebalanceLogs.push(logItem)
+
+    await studyPlan.save()
 
     res.status(200).json({
       message: `AI rebalanced schedule! ${rescheduledCount} missed task(s) rescheduled ✅`,
