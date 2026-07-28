@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
   Brain, Send, MessageSquare, History, Video, Play,
-  GraduationCap, Cpu, ChevronRight, Loader2, Layers
+  GraduationCap, Cpu, ChevronRight, Loader2, Layers, HelpCircle
 } from 'lucide-react';
 import { aiAPI } from '../services/api';
 import FlashcardsQuizModal from '../components/FlashcardsQuizModal';
+import VoiceInputButton from '../components/VoiceInputButton';
 
 const STORAGE_KEY = 'ai_chat_messages';
 const HISTORY_KEY = 'ai_chat_history';
@@ -58,7 +59,7 @@ const AIAssistant = () => {
   const [activeVideoId, setActiveVideoId] = useState(null);
   const [activeVideoTitle, setActiveVideoTitle] = useState("");
 
-  // Save messages to localStorage whenever they change
+  // Save messages to localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
   }, [messages]);
@@ -68,7 +69,7 @@ const AIAssistant = () => {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
   }, [chatHistory]);
 
-  // Auto scroll to bottom — only scroll the chat container not the whole page
+  // Auto scroll
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -82,64 +83,10 @@ const AIAssistant = () => {
         { id: "302g4iPmU7A", title: "Algebra Basics: What Is Algebra?", author: "Math Antics", duration: "14m", thumbnail: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=400&q=80" }
       ],
       College: [
-        { id: "F3qC5_Lz0zU", title: "Calculus 1 - Full Course Lecture", author: "Professor Leonard", duration: "2h 45m", thumbnail: "https://images.unsplash.com/photo-1453733190148-c44698c26588?w=400&q=80" },
-        { id: "1XXIPV2S6KA", title: "Matrix Algebra & Determinants", author: "MIT OpenCourseWare", duration: "48m", thumbnail: "https://images.unsplash.com/photo-1518156677180-95a2893f3e9f?w=400&q=80" }
+        { id: "F3qC5_Lz0zU", title: "Calculus 1 - Full Course Lecture", author: "Professor Leonard", duration: "2h 45m", thumbnail: "https://images.unsplash.com/photo-1453733190148-c44698c26588?w=400&q=80" }
       ],
       BS: [
-        { id: "h7n3p2_uA7s", title: "Linear Algebra: Vector Spaces & Bases", author: "Gilbert Strang", duration: "50m", thumbnail: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=400&q=80" },
-        { id: "733SjV2_N0w", title: "Multi-Variable Calculus - Triple Integrals", author: "MIT 18.02", duration: "52m", thumbnail: "https://images.unsplash.com/photo-1509228468518-180dd4864904?w=400&q=80" }
-      ],
-      MS: [
-        { id: "wK93p2e_N0w", title: "Partial Differential Equations", author: "Stanford University", duration: "1h 10m", thumbnail: "https://images.unsplash.com/photo-1518156677180-95a2893f3e9f?w=400&q=80" },
-        { id: "u18SjV2_N0w", title: "Numerical Analysis & Error Bounds", author: "Harvard Applied Math", duration: "58m", thumbnail: "https://images.unsplash.com/photo-1453733190148-c44698c26588?w=400&q=80" }
-      ],
-      PhD: [
-        { id: "q93p2e_PhD1", title: "Differential Geometry: Manifolds", author: "IAS Princeton", duration: "1h 25m", thumbnail: "https://images.unsplash.com/photo-1509228468518-180dd4864904?w=400&q=80" },
-        { id: "w28SjV2_PhD2", title: "Topology & Homology Theory", author: "Oxford Mathematics", duration: "1h 40m", thumbnail: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=400&q=80" }
-      ]
-    },
-    Physics: {
-      School: [
-        { id: "ObH0PoWBeHM", title: "Newtonian Motion, Forces & Gravity", author: "CrashCourse Physics", duration: "10m", thumbnail: "https://images.unsplash.com/photo-1614064641938-3bbee52942c7?w=400&q=80" },
-        { id: "EwY6p-r_hyY", title: "What is Light & Waves?", author: "Kurzgesagt Science", duration: "8m", thumbnail: "https://images.unsplash.com/photo-1507668077129-56e32842fceb?w=400&q=80" }
-      ],
-      College: [
-        { id: "7Zc9NuM90JY", title: "Physics I: Classical Mechanics", author: "Walter Lewin (MIT)", duration: "50m", thumbnail: "https://images.unsplash.com/photo-1607988795691-3d0147b43231?w=400&q=80" },
-        { id: "983SjV2_N0w", title: "Electromagnetism - Gauss's Law", author: "Yale Course Lectures", duration: "55m", thumbnail: "https://images.unsplash.com/photo-1518156677180-95a2893f3e9f?w=400&q=80" }
-      ],
-      BS: [
-        { id: "2h1E3YJMKfA", title: "Modern Physics: Special Relativity", author: "Stanford Susskind", duration: "1h 15m", thumbnail: "https://images.unsplash.com/photo-1614064641938-3bbee52942c7?w=400&q=80" },
-        { id: "k18SjV2_N0w", title: "Quantum Physics & Wave Functions", author: "MIT 8.04", duration: "54m", thumbnail: "https://images.unsplash.com/photo-1507668077129-56e32842fceb?w=400&q=80" }
-      ],
-      MS: [
-        { id: "u28SjV2_MS1", title: "Statistical Mechanics", author: "Oxford University", duration: "1h 05m", thumbnail: "https://images.unsplash.com/photo-1607988795691-3d0147b43231?w=400&q=80" },
-        { id: "y28SjV2_MS2", title: "Advanced Quantum Field Theory", author: "Perimeter Institute", duration: "1h 20m", thumbnail: "https://images.unsplash.com/photo-1518156677180-95a2893f3e9f?w=400&q=80" }
-      ],
-      PhD: [
-        { id: "x28SjV2_PhD1", title: "General Relativity: Einstein Field Equations", author: "Stanford Susskind", duration: "1h 38m", thumbnail: "https://images.unsplash.com/photo-1614064641938-3bbee52942c7?w=400&q=80" },
-        { id: "z28SjV2_PhD2", title: "String Theory & Holographic Duality", author: "IAS Princeton", duration: "1h 45m", thumbnail: "https://images.unsplash.com/photo-1507668077129-56e32842fceb?w=400&q=80" }
-      ]
-    },
-    "Computer Science": {
-      School: [
-        { id: "k5E2A5a0Vn0", title: "Programming Basics with Python", author: "Coding for Beginners", duration: "15m", thumbnail: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=400&q=80" },
-        { id: "t28SjV2_N0w", title: "What is an Algorithm?", author: "GCF LearnFree", duration: "6m", thumbnail: "https://images.unsplash.com/photo-1607799279861-4dd421887fb3?w=400&q=80" }
-      ],
-      College: [
-        { id: "yOzzT3c3J8o", title: "CS50 Introduction to Computer Science", author: "David J. Malan (Harvard)", duration: "2h 15m", thumbnail: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=400&q=80" },
-        { id: "r28SjV2_N0w", title: "Object Oriented Programming in Java", author: "freeCodeCamp", duration: "1h 30m", thumbnail: "https://images.unsplash.com/photo-1607799279861-4dd421887fb3?w=400&q=80" }
-      ],
-      BS: [
-        { id: "8hly31x1v1s", title: "Data Structures & Algorithms Full Course", author: "William Fiset", duration: "8h 12m", thumbnail: "https://images.unsplash.com/photo-1607799279861-4dd421887fb3?w=400&q=80" },
-        { id: "0n3jM_L-73E", title: "Advanced Algorithms Lectures (CS224)", author: "Harvard University", duration: "1h 12m", thumbnail: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=400&q=80" }
-      ],
-      MS: [
-        { id: "m28SjV2_MS1", title: "Distributed Systems & Cloud Architecture", author: "MIT 6.824", duration: "1h 22m", thumbnail: "https://images.unsplash.com/photo-1607799279861-4dd421887fb3?w=400&q=80" },
-        { id: "n28SjV2_MS2", title: "Machine Learning: Neural Networks", author: "Stanford CS229", duration: "1h 18m", thumbnail: "https://images.unsplash.com/photo-1507668077129-56e32842fceb?w=400&q=80" }
-      ],
-      PhD: [
-        { id: "p28SjV2_PhD1", title: "Theory of Computation", author: "MIT OpenCourseWare", duration: "1h 20m", thumbnail: "https://images.unsplash.com/photo-1607799279861-4dd421887fb3?w=400&q=80" },
-        { id: "q28SjV2_PhD2", title: "Quantum Computing Algorithms", author: "IAS Princeton", duration: "1h 35m", thumbnail: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=400&q=80" }
+        { id: "h7n3p2_uA7s", title: "Linear Algebra: Vector Spaces & Bases", author: "Gilbert Strang", duration: "50m", thumbnail: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=400&q=80" }
       ]
     }
   };
@@ -181,7 +128,6 @@ const AIAssistant = () => {
           }, ...prev]);
         }
 
-        // save to history sidebar
         const historyTitle = query.length > 40 ? query.substring(0, 40) + '...' : query;
         const newHistory = {
           id: Date.now(),
@@ -245,10 +191,9 @@ const AIAssistant = () => {
   };
 
   return (
-    // ─── FIX 1: use h-full instead of min-h to prevent page expansion ───
     <div className="animate-in fade-in duration-500 flex flex-col lg:flex-row gap-6 h-[calc(100vh-120px)] overflow-hidden">
 
-      {/* LEFT SIDEBAR */}
+      {/* LEFT SIDEBAR - ARCHIVES */}
       <div className="lg:w-72 bg-dark-900/60 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between overflow-hidden flex-shrink-0">
         <div className="flex flex-col h-full">
           <div className="flex items-center justify-between pb-2 border-b border-slate-800 mb-3">
@@ -264,7 +209,6 @@ const AIAssistant = () => {
             </button>
           </div>
 
-          {/* ─── FIX 2: overflow-y-auto on sidebar list only ─── */}
           <div className="space-y-2 overflow-y-auto flex-1 pr-1">
             {chatHistory.map(hist => (
               <button
@@ -292,24 +236,23 @@ const AIAssistant = () => {
 
           <div className="pt-4 border-t border-slate-800 mt-3 hidden lg:block text-[10px] text-slate-500 leading-relaxed">
             <Cpu className="w-4 h-4 text-purple-400 mb-1" />
-            Powered by Groq LLM — School to PhD level support.
+            Powered by Groq LLM — Context-aware Study Tutor.
           </div>
         </div>
       </div>
 
-      {/* RIGHT CHAT WORKSPACE */}
-      {/* ─── FIX 3: flex-col with fixed height, no page scroll ─── */}
+      {/* RIGHT WORKSPACE */}
       <div className="flex-1 bg-dark-900/40 border border-slate-800/50 rounded-2xl flex flex-col overflow-hidden relative">
-
-        {/* Top Bar */}
+        
+        {/* Chat Header */}
         <div className="p-4 bg-gradient-to-r from-primary-950/20 via-purple-950/20 to-dark-900/60 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-tr from-primary-500 to-purple-600 rounded-xl">
               <Brain className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="font-extrabold text-sm text-white">Academic Concept Explainer</h3>
-              <p className="text-[10px] text-slate-400">Ask questions, read guides, watch lectures</p>
+              <h3 className="font-extrabold text-sm text-white">AI Chat Tutor</h3>
+              <p className="text-[10px] text-slate-400">Personal context-aware educational assistant</p>
             </div>
           </div>
 
@@ -319,7 +262,7 @@ const AIAssistant = () => {
               <select
                 value={academicLevel}
                 onChange={(e) => setAcademicLevel(e.target.value)}
-                className="bg-dark-900 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold outline-none text-slate-100"
+                className="bg-dark-900 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold outline-none text-slate-100 animate-in fade-in"
               >
                 <option value="School">🎒 School</option>
                 <option value="College">🏫 College</option>
@@ -335,12 +278,15 @@ const AIAssistant = () => {
               className="bg-dark-900 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold outline-none text-slate-100"
             >
               {subjects.map(s => (
-                <option key={s.id} value={s.name}>{s.name}</option>
+                <option key={s.id || s.name} value={s.name}>{s.name}</option>
               ))}
-              <option value="Math">Math</option>
-              <option value="Physics">Physics</option>
-              <option value="Computer Science">Computer Science</option>
-              <option value="General">General</option>
+              {subjects.length === 0 && (
+                <>
+                  <option value="Math">Math</option>
+                  <option value="Physics">Physics</option>
+                  <option value="Computer Science">Computer Science</option>
+                </>
+              )}
             </select>
 
             <button
@@ -360,30 +306,27 @@ const AIAssistant = () => {
           </div>
         </div>
 
-        {/* ─── FIX 4: Chat messages scroll INSIDE this div only ─── */}
+        {/* Messages list */}
         <div
           ref={chatContainerRef}
           className="flex-1 p-4 overflow-y-auto space-y-6"
           style={{ minHeight: 0 }}
         >
-          {messages.map((msg, index) => {
-            return (
-              <div key={index} className="space-y-4">
-                <div className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] p-4 rounded-2xl border text-xs leading-relaxed ${
-                    msg.sender === 'user'
-                      ? 'bg-primary-500/10 border-primary-500/20 text-slate-100 rounded-tr-none shadow-md'
-                      : 'bg-slate-900/60 border-slate-800 text-slate-200 rounded-tl-none'
-                  }`}>
-                    <div className="whitespace-pre-line font-medium leading-relaxed">
-                      {msg.text}
-                    </div>
+          {messages.map((msg, index) => (
+            <div key={index} className="space-y-4">
+              <div className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] p-4 rounded-2xl border text-xs leading-relaxed ${
+                  msg.sender === 'user'
+                    ? 'bg-primary-500/10 border-primary-500/20 text-slate-100 rounded-tr-none shadow-md'
+                    : 'bg-slate-900/60 border-slate-800 text-slate-200 rounded-tl-none'
+                }`}>
+                  <div className="whitespace-pre-line font-medium leading-relaxed">
+                    {msg.text}
                   </div>
                 </div>
-
               </div>
-            );
-          })}
+            </div>
+          ))}
 
           {isStreaming && (
             <div className="flex justify-start">
@@ -396,36 +339,29 @@ const AIAssistant = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Video Player Modal */}
-        {activeVideoId && (
-          <div className="absolute inset-0 bg-dark-900/90 backdrop-blur-md z-50 p-6 flex flex-col justify-center items-center animate-in fade-in duration-300">
-            <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
-              <div className="p-4 bg-slate-800 flex items-center justify-between border-b border-slate-700">
-                <h4 className="font-bold text-xs text-white truncate max-w-[80%]">{activeVideoTitle}</h4>
-                <button
-                  onClick={() => setActiveVideoId(null)}
-                  className="px-2.5 py-1 bg-slate-700 border border-slate-600 hover:bg-slate-600 rounded-lg text-[10px] font-bold text-slate-300 cursor-pointer"
-                >
-                  Close Player
-                </button>
-              </div>
-              <div className="aspect-video w-full">
-                <iframe
-                  className="w-full h-full"
-                  src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1`}
-                  title={activeVideoTitle}
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                ></iframe>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Suggested Prompts Row */}
+        <div className="px-4 py-2 border-t border-slate-800/80 bg-slate-900/10 flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-none flex-shrink-0">
+          <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest mr-1.5 flex-shrink-0">Tutor Prompts:</span>
+          {[
+            { label: "Explain simply", prompt: "Explain the main logic simply using real-world analogies." },
+            { label: "Deep dive details", prompt: "Conduct a deep structural analysis of this topic with formulas." },
+            { label: "Give practical examples", prompt: "Give me 2 practical examples of this concept." },
+            { label: "Create review summary", prompt: "Create a structured summary of this topic." },
+            { label: "Help me study", prompt: "Suggest a study strategy for this module." }
+          ].map((item, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => handleSend(null, item.prompt)}
+              className="px-3 py-1 rounded-full bg-slate-800/60 hover:bg-slate-750 border border-slate-750 hover:border-slate-650 text-[10px] font-semibold text-slate-300 hover:text-white transition-all cursor-pointer flex-shrink-0"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
 
-        {/* Input Area */}
+        {/* Input Form with Voice Button */}
         <div className="p-4 border-t border-slate-800 bg-slate-950/20 flex-shrink-0">
-
           <form onSubmit={handleSend} className="flex gap-2.5">
             <input
               type="text"
@@ -434,6 +370,9 @@ const AIAssistant = () => {
               placeholder={`Ask about ${selectedSubject} (${academicLevel} level)...`}
               className="flex-1 bg-dark-900 border border-slate-700 px-4 py-3 rounded-xl text-xs font-semibold focus:border-primary-500 outline-none text-slate-100"
             />
+            
+            {/* Context-aware voice mic input button */}
+            <VoiceInputButton onTranscript={(text) => setInputVal(text)} />
 
             <button
               type="submit"
