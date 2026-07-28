@@ -564,7 +564,9 @@ const DashboardLayout = () => {
             timerActive, setTimerActive,
             timerMode, setTimerMode,
             customMinutes, setCustomMinutes,
-            weeklyHours
+            weeklyHours,
+            userName, setUserName,
+            userEmail, setUserEmail
           }} />
         </div>
       </div>

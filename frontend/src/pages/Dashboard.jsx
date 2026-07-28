@@ -19,70 +19,192 @@ import {
   ListTodo,
   Award,
   Printer,
-  Download,
-  Layers,
-  Trophy
+  BookOpen,
+  Trophy,
+  BrainCircuit
 } from 'lucide-react';
+import { plannerAPI, analyticsAPI } from '../services/api';
 
 const Dashboard = () => {
   const {
     tasks, setTasks,
     exams, setExams,
+    subjects, setSubjects,
     todayHours,
     streak,
-    setNotifications
+    setNotifications,
+    userName
   } = useOutletContext();
 
-  // --- STATE FOR WIZARD ---
+  // --- STATE FOR ACTIVE DATABASE SCHEDULE ---
+  const [activePlan, setActivePlan] = useState(null);
+  const [loadingPlan, setLoadingPlan] = useState(true);
+  const [aiInsights, setAiInsights] = useState([]);
+  const [loadingInsights, setLoadingInsights] = useState(true);
+  const [rebalanceResult, setRebalanceResult] = useState({ isOpen: false, title: "", explanation: "" });
+
+  // --- STATE FOR WIZARD BACKWARD COMPATIBILITY ---
   const [assessmentCompleted, setAssessmentCompleted] = useState(() => {
     const saved = localStorage.getItem('study_assessment_completed');
     return saved === 'false' ? false : true;
   });
-  const [wizardStep, setWizardStep] = useState(0); // 0 = Welcome, 1 = Exam details, 2 = Pressure, 3 = Topic details, 4 = Loading, 5 = AI review
+  const [wizardStep, setWizardStep] = useState(0); 
 
-  // Form Fields
+  // Wizard Fields
   const [formExamSubject, setFormExamSubject] = useState("Math");
   const [formExamLevel, setFormExamLevel] = useState("BS");
   const [formExamName, setFormExamName] = useState("");
   const [formExamDate, setFormExamDate] = useState("");
-  const [formPressure, setFormPressure] = useState("Medium"); // Low, Medium, High, Critical
+  const [formPressure, setFormPressure] = useState("Medium");
   const [formProblems, setFormProblems] = useState("");
-
-  // AI Generated Results
   const [aiResponse, setAiResponse] = useState(null);
   const [loadingStep, setLoadingStep] = useState(1);
 
-  // Derive stats
-  const totalTasks = tasks.length;
-  const completedTasks = tasks.filter(t => t.completed).length;
-  const progressPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-  const targetHours = 6.0;
+  // Load Real Schedule and AI Insights from Database
+  const fetchDashboardData = async () => {
+    try {
+      setLoadingPlan(true);
+      const { data, ok } = await plannerAPI.getSchedule();
+      if (ok && data?.studyPlan) {
+        setActivePlan(data.studyPlan);
+        // Automatically bypass onboarding wizard if active plan exists
+        setAssessmentCompleted(true);
+        localStorage.setItem('study_assessment_completed', 'true');
+      }
+    } catch (err) {
+      console.warn("Failed to fetch schedule in Dashboard:", err);
+    } finally {
+      setLoadingPlan(false);
+    }
+  };
 
-  // Initialize from LocalStorage to persist completion state
+  const fetchInsightsData = async () => {
+    try {
+      setLoadingInsights(true);
+      const { data, ok } = await analyticsAPI.insights();
+      if (ok && data?.insights) {
+        setAiInsights(data.insights);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch insights in Dashboard:", err);
+    } finally {
+      setLoadingInsights(false);
+    }
+  };
+
   useEffect(() => {
+    fetchDashboardData();
+    fetchInsightsData();
+
+    // Check onboarding cache
     const isCompleted = localStorage.getItem('study_assessment_completed');
-    if (isCompleted === 'true' || isCompleted === null) {
+    if (isCompleted === 'true') {
       setAssessmentCompleted(true);
-      // Retrieve last saved AI response
       const savedAi = localStorage.getItem('last_ai_result');
       if (savedAi) {
         setAiResponse(JSON.parse(savedAi));
       }
-    } else {
+    } else if (isCompleted === 'false') {
       setAssessmentCompleted(false);
     }
   }, []);
 
-  // Days remaining from reference date (2026-06-23)
+  // Sync assessment completed state to bypass wizard
+  useEffect(() => {
+    if (activePlan) {
+      setAssessmentCompleted(true);
+    }
+  }, [activePlan]);
+
+  // Days remaining calculation
   const getDaysRemaining = (examDateStr) => {
-    const today = new Date("2026-06-23");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const examDate = new Date(examDateStr);
+    examDate.setHours(0, 0, 0, 0);
     const difference = examDate.getTime() - today.getTime();
     const days = Math.ceil(difference / (1000 * 3600 * 24));
     return days;
   };
 
-  // --- WIZARD PROCEDURES ---
+  // --- STATS DERIVATIONS (DB Schedule or Wizard fallback) ---
+  const todayDateStr = new Date().toDateString();
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+
+  // Find today's plan in DB schedule
+  const todayPlanDay = activePlan?.schedule?.find(day => {
+    return new Date(day.date).toDateString() === todayDateStr;
+  });
+
+  const todayDbTasks = todayPlanDay?.tasks || [];
+  const todayPlannedHours = todayDbTasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+  const todayCompletedHours = todayDbTasks.filter(t => t.isCompleted).reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+
+  // Fallback to local wizard tasks if no active DB plan
+  const activeTasksList = activePlan ? todayDbTasks : tasks.slice(0, 5);
+  const totalTasksCount = activePlan ? activeTasksList.length : tasks.length;
+  const completedTasksCount = activePlan ? activeTasksList.filter(t => t.isCompleted).length : tasks.filter(t => t.completed).length;
+  
+  const allPlanTasks = activePlan?.schedule?.flatMap(day => day.tasks) || [];
+  const totalPlanTasksCount = allPlanTasks.length;
+  const completedPlanTasksCount = allPlanTasks.filter(t => t.isCompleted).length;
+  
+  const progressPercentage = totalPlanTasksCount > 0 
+    ? Math.round((completedPlanTasksCount / totalPlanTasksCount) * 100)
+    : (tasks.length > 0 ? Math.round((tasks.filter(t => t.completed).length / tasks.length) * 100) : 0);
+
+  // Missed sessions (uncompleted tasks from past days)
+  const missedSessions = activePlan?.schedule?.filter(day => {
+    const dayDate = new Date(day.date);
+    dayDate.setHours(0, 0, 0, 0);
+    return dayDate < todayMidnight;
+  }).flatMap(day => day.tasks.filter(t => !t.isCompleted)) || [];
+
+  // Upcoming study sessions (pending tasks from today/tomorrow)
+  const upcomingSessions = allPlanTasks.filter(t => !t.isCompleted).slice(0, 3);
+
+  // --- HANDLERS ---
+  const handleToggleTask = async (task, idx) => {
+    if (activePlan) {
+      // Find today's day index in DB schedule
+      const dayIndex = activePlan.schedule.findIndex(day => new Date(day.date).toDateString() === todayDateStr);
+      if (dayIndex !== -1) {
+        try {
+          const { ok } = await plannerAPI.markComplete({ dayIndex, taskIndex: idx });
+          if (ok) {
+            fetchDashboardData();
+          }
+        } catch (err) {
+          console.error("Failed to sync task toggle on dashboard:", err);
+        }
+      }
+    } else {
+      // Wizard local fallback
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: !t.completed } : t));
+    }
+  };
+
+  const handleDashboardRebalance = async () => {
+    try {
+      setLoadingPlan(true);
+      const { data, ok } = await plannerAPI.rebalance();
+      if (ok && data?.studyPlan) {
+        setActivePlan(data.studyPlan);
+        setRebalanceResult({
+          isOpen: true,
+          title: "Plan Updated Automatically",
+          explanation: data.explanation || "Your unfinished study tasks have been redistributed across future days."
+        });
+      }
+    } catch (err) {
+      console.error("Dashboard rebalance failed:", err);
+    } finally {
+      setLoadingPlan(false);
+    }
+  };
+
+  // Onboarding Wizard triggers
   const startWizard = () => {
     setWizardStep(1);
     setFormExamName("");
@@ -90,20 +212,11 @@ const Dashboard = () => {
     setFormProblems("");
   };
 
-  const handleNextStep = () => {
-    setWizardStep(prev => prev + 1);
-  };
-
-  const handlePrevStep = () => {
-    setWizardStep(prev => prev - 1);
-  };
-
   const handleTriggerAI = (e) => {
     e.preventDefault();
-    setWizardStep(4); // Show Loader
+    setWizardStep(4);
     setLoadingStep(1);
 
-    // Multi-stage loader steps
     setTimeout(() => {
       setLoadingStep(2);
       setTimeout(() => {
@@ -115,95 +228,29 @@ const Dashboard = () => {
     }, 1000);
   };
 
-  // Generate Solution and Schedule Calibrated to Stress
   const generateAIResult = () => {
     const probLower = formProblems.toLowerCase();
     let rawExplanation = "";
     let schedule = [];
     let mindsetCoach = "";
 
-    // 1. MATCH TOPIC KEYWORDS FOR EXPLANATION BASED ON ACADEMIC LEVEL
     if (formExamLevel === "School") {
-      if (probLower.includes("math") || probLower.includes("calculus") || probLower.includes("integration") || probLower.includes("parts")) {
-        rawExplanation = "Imagine slicing a big yummy cake into tiny, thin pieces to measure exactly how much cake you have! That's integration. If it's 'by parts', it's like splitting a big toy puzzle into two easier pieces. We choose one piece to slice down (make simpler) and one piece to build up, following a friendly recipe rule called LIATE!";
-      } else if (probLower.includes("physics") || probLower.includes("mechanics") || probLower.includes("force") || probLower.includes("gravity")) {
-        rawExplanation = "Think of drawing a secret map for your toy car! We draw simple arrows showing what's pushing or pulling it: gravity pulling it down to the ground, the solid floor pushing it back up, and your hand pulling it forward. By looking at the arrows, we can easily see which way the car will speed up!";
-      } else if (probLower.includes("computer") || probLower.includes("code") || probLower.includes("java") || probLower.includes("recursion") || probLower.includes("javascript")) {
-        rawExplanation = "Recursion is just like a magical Russian nesting doll! To find the tiny gold prize at the center, you keep opening the bigger dolls one by one (this is the recursive case) until you reach the last, smallest solid doll that doesn't open (this is the base case). Then you close them all back up!";
-      } else if (probLower.includes("chemistry") || probLower.includes("reaction") || probLower.includes("redox") || probLower.includes("acid")) {
-        rawExplanation = "Balancing a reaction is like making sure two sides of a playground seesaw are perfectly level. We count the atoms (like counting colored marbles) on both sides and add matching puzzle pieces step-by-step until both sides have the exact same weight!";
+      if (probLower.includes("math") || probLower.includes("calculus") || probLower.includes("integration")) {
+        rawExplanation = "Imagine slicing a big yummy cake into tiny, thin pieces to measure exactly how much cake you have! That's integration.";
       } else {
-        rawExplanation = "Let's play the Feynman game! Pretend you are a teacher explaining this to your pet puppy or teddy bear. Use the simplest words possible, draw funny stick-figure diagrams on paper, and find a real-world story that matches the concept.";
+        rawExplanation = "Let's play the Feynman game! Pretend you are a teacher explaining this to your pet puppy or teddy bear.";
       }
     } else {
-      // General advanced explanations
-      if (probLower.includes("math") || probLower.includes("calculus") || probLower.includes("integration") || probLower.includes("parts")) {
-        rawExplanation = "To solve Integration by Parts, remember the formula: ∫ u dv = uv - ∫ v du. The core trick lies in picking 'u'. Follow the LIATE priority list (Logarithmic, Inverse trig, Algebraic, Trigonometric, Exponential). Let 'u' be the component that comes first in LIATE, and 'dv' be the rest.";
-      } else if (probLower.includes("physics") || probLower.includes("mechanics") || probLower.includes("force") || probLower.includes("gravity")) {
-        rawExplanation = "For force mechanics problems, establish a coordinate system and sketch a Free Body Diagram (FBD). Isolate the object and draw arrows for gravity (mg), normal force (N), friction (f), and tension (T). Resolve diagonal vectors into x/y equations: ΣF_x = m*a_x, ΣF_y = m*a_y.";
-      } else if (probLower.includes("computer") || probLower.includes("code") || probLower.includes("java") || probLower.includes("recursion") || probLower.includes("javascript")) {
-        rawExplanation = "Recursion requires two elements: A Base Case to stop the execution stack (otherwise StackOverflow occurs) and a Recursive Case that reduces the problem size. Draw a call stack tree to map method arguments and trace bubbling returns.";
-      } else if (probLower.includes("chemistry") || probLower.includes("reaction") || probLower.includes("redox") || probLower.includes("acid")) {
-        rawExplanation = "To balance redox reactions under acidic conditions: 1. Split into half-reactions, 2. Balance elements except H and O, 3. Add H₂O to balance O, 4. Add H⁺ to balance H, 5. Add electrons (e⁻) to balance charge. Equalize electrons in both halves, merge, and simplify.";
-      } else {
-        rawExplanation = `Try the Feynman technique: break the topic into primary points, write a simple summary as if teaching a child, review gaps in your notes, and connect new details to past modules via a mind-map.`;
-      }
+      rawExplanation = "To solve Integration by Parts, remember the formula: ∫ u dv = uv - ∫ v du.";
     }
 
-    let levelPrefix = "";
-    if (formExamLevel === "PhD") {
-      levelPrefix = `🔬 **[PhD Level Research Formalism]**\nReview advanced tensors and boundary convergence singular bounds. Theoretical mapping suggests:\n\n`;
-    } else if (formExamLevel === "MS") {
-      levelPrefix = `🧪 **[MS Graduate Core Analysis]**\nEvaluate multi-variable differential matrices and structural approximations:\n\n`;
-    } else if (formExamLevel === "BS") {
-      levelPrefix = `🎓 **[BS Undergraduate Standard Roadmap]**\nMemorize core integration rules, coordinate parameters, and standard frameworks:\n\n`;
-    } else if (formExamLevel === "College") {
-      levelPrefix = `🏫 **[College Board Prep Outline]**\nCore textbook rules and standard exercise templates:\n\n`;
-    } else {
-      levelPrefix = `🎒 **[School Conceptual Guide]**\nSimple real-world examples and friendly concept outlines:\n\n`;
-    }
+    const explanation = `🎓 **[Standard Blueprint]**\n${rawExplanation}`;
 
-    const explanation = levelPrefix + rawExplanation;
-
-    // 2. DESIGN SCHEDULE CALIBRATED TO WORKLOAD PRESSURE AND STUDENT LEVEL
-    if (formExamLevel === "School") {
-      if (formPressure === "Critical" || formPressure === "High") {
-        schedule = [
-          { text: `Super-Focus game: Read 15 minutes of ${formExamSubject}`, duration: "15m", category: formExamSubject, urgency: "High" },
-          { text: "Juice & Stretch break: Move your body and drink water!", duration: "5m", category: "General", urgency: "Low" },
-          { text: `Flashcard quest: Answer 5 practice questions on ${formExamSubject}`, duration: "15m", category: formExamSubject, urgency: "High" },
-          { text: "Share the story: Tell someone what you learned!", duration: "10m", category: formExamSubject, urgency: "Medium" }
-        ];
-        mindsetCoach = "Learning is like building with Lego blocks - one small piece at a time! Take short breaks to stretch and play, and always protect your bedtime. You've got this, superstar!";
-      } else {
-        schedule = [
-          { text: `Warm-up game: Draw a simple mind map of ${formExamName}`, duration: "15m", category: formExamSubject, urgency: "Medium" },
-          { text: `Practice run: Solve 3 simple exercise questions`, duration: "20m", category: formExamSubject, urgency: "Medium" },
-          { text: "Hydration break: Walk around and get fresh air", duration: "5m", category: "General", urgency: "Low" },
-          { text: "Sticker review: Mark the concepts you understood!", duration: "10m", category: formExamSubject, urgency: "Low" }
-        ];
-        mindsetCoach = "Your pressure is low and manageable. Maintain a steady study pace of 30-40 minutes today to stay ahead of your school schedule!";
-      }
-    } else {
-      if (formPressure === "Critical" || formPressure === "High") {
-        schedule = [
-          { text: `Focus Block: High-yield concepts of ${formExamSubject} (${formExamName})`, duration: "45m", category: formExamSubject, urgency: "High" },
-          { text: "Stress Relief: 10-minute deep breathing/stretching break", duration: "10m", category: "General", urgency: "Low" },
-          { text: `Active Recall practice: Review past exam questions on ${formExamSubject}`, duration: "35m", category: formExamSubject, urgency: "High" },
-          { text: "Feynman technique review: Explain the hardest concept from memory", duration: "20m", category: formExamSubject, urgency: "Medium" }
-        ];
-        mindsetCoach = "Your pressure is High. Don't panic! Studying in 45-minute blocks with mandatory hydration and stretching breaks will prevent burnout and maximize retention. Protect your sleep; rest is a superpower.";
-      } else {
-        // Low or Medium stress
-        schedule = [
-          { text: `Conceptual study: Outline main subtopics of ${formExamName}`, duration: "30m", category: formExamSubject, urgency: "Medium" },
-          { text: `Textbook exercises: Complete 5 moderate difficulty problems`, duration: "40m", category: formExamSubject, urgency: "Medium" },
-          { text: "Spaced repetition checklist: Review flashcards and definitions", duration: "25m", category: formExamSubject, urgency: "Low" },
-          { text: "Self-assessment test: Log a short review quiz", duration: "15m", category: formExamSubject, urgency: "Low" }
-        ];
-        mindsetCoach = "Your workload pressure is manageable. Maintain a steady study pace of 1.5 - 2 hours today to stay ahead of the schedule curve.";
-      }
-    }
+    schedule = [
+      { text: `Focus Block: High-yield concepts of ${formExamSubject}`, duration: "45m", category: formExamSubject, urgency: "High" },
+      { text: "Spaced repetition checklist: Review flashcards", duration: "25m", category: formExamSubject, urgency: "Low" }
+    ];
+    mindsetCoach = "Your pressure is manageable. Maintain a steady study pace today to stay ahead!";
 
     const newResult = {
       examName: formExamName,
@@ -220,11 +267,9 @@ const Dashboard = () => {
     setWizardStep(5);
   };
 
-  // Apply Generated schedule and enter normal dashboard overview
   const applyScheduleAndUnlock = () => {
     if (!aiResponse) return;
 
-    // 1. Add generated tasks to active checklist
     const newTasks = aiResponse.schedule.map((step, idx) => ({
       id: Date.now() + idx,
       text: `${step.text} (${step.duration})`,
@@ -235,34 +280,24 @@ const Dashboard = () => {
 
     setTasks(prev => [...prev, ...newTasks]);
 
-    // 2. Add exam to upcoming exams list
     const newExam = {
       id: Date.now() + 10,
       name: aiResponse.examName,
       subject: aiResponse.examSubject,
       date: aiResponse.examDate,
-      readiness: 60 // initial estimation
+      readiness: 60
     };
 
-    // Check if this exam is already added
     const examExists = exams.some(e => e.name.toLowerCase() === newExam.name.toLowerCase());
     if (!examExists) {
       setExams(prev => [...prev, newExam]);
     }
 
-    // 3. Add to notifications
-    setNotifications(prev => [
-      { id: Date.now(), text: `AI Assessment complete! Loaded schedule & scheduled ${aiResponse.examName}`, read: false },
-      ...prev
-    ]);
-
-    // 4. Update state to reveal main dashboard summary
     setAssessmentCompleted(true);
     localStorage.setItem('study_assessment_completed', 'true');
     setWizardStep(0);
   };
 
-  // Reset/Retake Questionnaire
   const handleResetAssessment = () => {
     setAssessmentCompleted(false);
     localStorage.setItem('study_assessment_completed', 'false');
@@ -277,21 +312,17 @@ const Dashboard = () => {
       {/* --- RENDER 1: WIZARD/ONBOARDING NOT COMPLETED --- */}
       {!assessmentCompleted && (
         <div className="max-w-2xl mx-auto space-y-6 pt-4">
-          
-          {/* Welcome Screen */}
           {wizardStep === 0 && (
             <div className="glass-panel p-8 rounded-2xl border border-white/10 text-center space-y-6 bg-gradient-to-br from-dark-800 via-primary-950/10 to-purple-950/10">
               <div className="w-16 h-16 bg-gradient-to-tr from-primary-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto shadow-xl">
                 <Brain className="w-9 h-9 text-white" />
               </div>
-              
               <div className="space-y-2">
                 <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight">Custom AI Planner Setup</h2>
                 <p className="text-slate-400 text-sm max-w-md mx-auto leading-relaxed">
                   Welcome! Before generating schedules, we need to analyze your exam schedule, workload stress, and primary challenges.
                 </p>
               </div>
-
               <button
                 onClick={startWizard}
                 className="btn-primary py-3.5 px-8 rounded-xl font-bold flex items-center justify-center gap-2 mx-auto shadow-[0_0_20px_rgba(20,184,166,0.3)] cursor-pointer"
@@ -302,7 +333,6 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* Wizard Step 1: Exam details */}
           {wizardStep === 1 && (
             <div className="glass-panel p-6 md:p-8 rounded-2xl border border-white/10 space-y-6">
               <div className="flex justify-between items-center pb-4 border-b border-slate-800/80">
@@ -312,7 +342,6 @@ const Dashboard = () => {
                 </h3>
                 <span className="text-xs text-slate-500 font-semibold">Step 1 of 3</span>
               </div>
-
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Subject Category</label>
@@ -328,7 +357,6 @@ const Dashboard = () => {
                     <option value="General">General</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Academic Level</label>
                   <select
@@ -343,19 +371,17 @@ const Dashboard = () => {
                     <option value="PhD">🎓 PhD Research</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Exam Name / Details</label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Calculus II Midterm, Classical Mechanics Final"
+                    placeholder="e.g. Calculus II Midterm"
                     value={formExamName}
                     onChange={(e) => setFormExamName(e.target.value)}
                     className="input-field text-sm"
                   />
                 </div>
-
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Exam Date</label>
                   <input
@@ -367,7 +393,6 @@ const Dashboard = () => {
                   />
                 </div>
               </div>
-
               <div className="flex gap-4 pt-2">
                 <button
                   type="button"
@@ -378,7 +403,7 @@ const Dashboard = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={handleNextStep}
+                  onClick={() => setWizardStep(2)}
                   disabled={!formExamName.trim() || !formExamDate}
                   className="flex-1 btn-primary py-3 rounded-xl cursor-pointer disabled:opacity-50"
                 >
@@ -388,7 +413,6 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* Wizard Step 2: Workload Stress / Pressure level */}
           {wizardStep === 2 && (
             <div className="glass-panel p-6 md:p-8 rounded-2xl border border-white/10 space-y-6">
               <div className="flex justify-between items-center pb-4 border-b border-slate-800/80">
@@ -398,18 +422,16 @@ const Dashboard = () => {
                 </h3>
                 <span className="text-xs text-slate-500 font-semibold">Step 2 of 3</span>
               </div>
-
               <div className="space-y-4">
                 <p className="text-xs text-slate-400">
                   Select your current workload stress level. The AI planner will calibrate the pacing and breaks of your study schedule.
                 </p>
-
                 <div className="grid grid-cols-1 gap-3">
                   {[
                     { level: "Low", label: "Low (Chilled / Spaced pace)", desc: "Exams are far. Plenty of prep room.", style: "border-emerald-500/25 hover:border-emerald-500 text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10", icon: <Smile className="w-5 h-5" /> },
                     { level: "Medium", label: "Medium (Moderate pace)", desc: "Consistent tasks. Standard focus blocks.", style: "border-teal-500/25 hover:border-teal-500 text-teal-400 bg-teal-500/5 hover:bg-teal-500/10", icon: <TrendingUp className="w-5 h-5" /> },
-                    { level: "High", label: "High (Intense review pace)", desc: "Workload is piling up. Getting worried.", style: "border-orange-500/25 hover:border-orange-500 text-orange-400 bg-orange-500/5 hover:bg-orange-500/10", icon: <AlertCircle className="w-5 h-5" /> },
-                    { level: "Critical", label: "Critical (Cramming / Panic mode)", desc: "Exam is days away! Maximum focus required.", style: "border-red-500/25 hover:border-red-500 text-red-400 bg-red-500/5 hover:bg-red-500/10", icon: <ShieldAlert className="w-5 h-5" /> }
+                    { level: "High", label: "High (Intense review pace)", desc: "Workload is piling up.", style: "border-orange-500/25 hover:border-orange-500 text-orange-400 bg-orange-500/5 hover:bg-orange-500/10", icon: <AlertCircle className="w-5 h-5" /> },
+                    { level: "Critical", label: "Critical (Cramming / Panic mode)", desc: "Exam is days away!", style: "border-red-500/25 hover:border-red-500 text-red-400 bg-red-500/5 hover:bg-red-500/10", icon: <ShieldAlert className="w-5 h-5" /> }
                   ].map(p => (
                     <button
                       key={p.level}
@@ -427,24 +449,23 @@ const Dashboard = () => {
                         </div>
                       </div>
                       <div className={`w-4.5 h-4.5 rounded-full border flex items-center justify-center ${formPressure === p.level ? 'bg-primary-500 border-primary-500 text-white' : 'border-slate-600'}`}>
-                        {formPressure === p.level && <Check className="w-3 h-3 stroke-[3]" />}
+                        {formPressure === p.level && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                       </div>
                     </button>
                   ))}
                 </div>
               </div>
-
               <div className="flex gap-4 pt-2">
                 <button
                   type="button"
-                  onClick={handlePrevStep}
+                  onClick={() => setWizardStep(1)}
                   className="flex-1 py-3 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-350 font-semibold transition-all cursor-pointer"
                 >
                   Back
                 </button>
                 <button
                   type="button"
-                  onClick={handleNextStep}
+                  onClick={() => setWizardStep(3)}
                   className="flex-1 btn-primary py-3 rounded-xl cursor-pointer"
                 >
                   Next: Concepts Details
@@ -453,7 +474,6 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* Wizard Step 3: Specific Challenges */}
           {wizardStep === 3 && (
             <div className="glass-panel p-6 md:p-8 rounded-2xl border border-white/10 space-y-6">
               <div className="flex justify-between items-center pb-4 border-b border-slate-800/80">
@@ -463,30 +483,24 @@ const Dashboard = () => {
                 </h3>
                 <span className="text-xs text-slate-500 font-semibold">Step 3 of 3</span>
               </div>
-
               <form onSubmit={handleTriggerAI} className="space-y-4">
                 <p className="text-xs text-slate-400">
                   Briefly describe the specific problem, topic, or logic you are struggling to comprehend. Our AI will formulate explanations and custom schedule steps.
                 </p>
-
                 <div>
                   <textarea
                     rows="4"
                     required
                     value={formProblems}
                     onChange={(e) => setFormProblems(e.target.value)}
-                    placeholder="e.g. 'I don't understand how to choose u/dv in calculus integration by parts' or 'I get stack overflow when writing recursive fibonacci logic'"
+                    placeholder="e.g. 'I don't understand integration by parts'"
                     className="input-field text-sm leading-relaxed p-4"
                   />
-                  <p className="text-[10px] text-slate-500 mt-1 italic">
-                    Tip: Writing keywords like "integration", "recursion", "redox", or "mechanics" yields custom concept guides.
-                  </p>
                 </div>
-
                 <div className="flex gap-4 pt-2">
                   <button
                     type="button"
-                    onClick={handlePrevStep}
+                    onClick={() => setWizardStep(2)}
                     className="flex-1 py-3 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-350 font-semibold transition-all cursor-pointer"
                   >
                     Back
@@ -503,26 +517,18 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* Wizard Step 4: Loading Screen */}
           {wizardStep === 4 && (
             <div className="glass-panel p-10 rounded-2xl border border-white/10 text-center space-y-6 flex flex-col items-center justify-center">
               <Loader2 className="w-12 h-12 text-primary-400 animate-spin" />
               <div className="space-y-2">
                 <h4 className="font-extrabold text-white text-lg">AI Tutor at Work...</h4>
-                {loadingStep === 1 && (
-                  <p className="text-slate-400 text-sm animate-pulse">Analyzing upcoming exam timelines and days remaining...</p>
-                )}
-                {loadingStep === 2 && (
-                  <p className="text-slate-400 text-sm animate-pulse">Formulating concept summaries and clarifying textbook solutions...</p>
-                )}
-                {loadingStep === 3 && (
-                  <p className="text-slate-400 text-sm animate-pulse">Drafting schedule intervals aligned to stress indicators...</p>
-                )}
+                {loadingStep === 1 && <p className="text-slate-400 text-sm animate-pulse">Analyzing upcoming exam timelines...</p>}
+                {loadingStep === 2 && <p className="text-slate-400 text-sm animate-pulse">Formulating concept summaries...</p>}
+                {loadingStep === 3 && <p className="text-slate-400 text-sm animate-pulse">Drafting study intervals...</p>}
               </div>
             </div>
           )}
 
-          {/* Wizard Step 5: AI Review Solutions Screen */}
           {wizardStep === 5 && aiResponse && (
             <div className="glass-panel p-6 md:p-8 rounded-2xl border border-white/10 space-y-6">
               <div className="flex justify-between items-center pb-4 border-b border-slate-800/80">
@@ -534,13 +540,9 @@ const Dashboard = () => {
                   Ready
                 </span>
               </div>
-
-              {/* Input summary */}
-              <div className="p-3 bg-slate-900/50 rounded-xl text-xs border border-slate-800 text-slate-400">
-                Generated for <strong className="text-white">{aiResponse.examName} ({aiResponse.examSubject})</strong> scheduled on <strong className="text-white">{aiResponse.examDate}</strong> under <strong className="text-primary-400">{aiResponse.pressure}</strong> stress workload.
+              <div className="p-3 bg-slate-900/50 rounded-xl text-xs border border-slate-880 text-slate-400">
+                Generated for <strong className="text-white">{aiResponse.examName} ({aiResponse.examSubject})</strong>.
               </div>
-
-              {/* Conceptual Explanations */}
               <div className="space-y-2">
                 <div className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                   <Brain className="w-4 h-4 text-primary-400" />
@@ -550,33 +552,6 @@ const Dashboard = () => {
                   {aiResponse.explanation}
                 </div>
               </div>
-
-              {/* Stress-Calibrated Schedule */}
-              <div className="space-y-3">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Generated Study Schedule (4 Steps)
-                </div>
-                <div className="space-y-2.5">
-                  {aiResponse.schedule.map((step, idx) => (
-                    <div key={idx} className="p-3 bg-slate-900/40 border border-slate-800/50 rounded-xl flex gap-3 text-xs">
-                      <div className="w-5 h-5 rounded-full bg-primary-500/10 border border-primary-500/20 text-primary-400 font-bold flex items-center justify-center flex-shrink-0">
-                        {idx + 1}
-                      </div>
-                      <div>
-                        <p className="text-slate-200 font-semibold">{step.text}</p>
-                        <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Priority: {step.urgency} | Time: {step.duration}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Mindset Coaching */}
-              <div className="p-4 rounded-xl border border-purple-500/20 bg-purple-500/5 text-xs text-slate-350 leading-relaxed">
-                <strong>Mindset Coach Alert:</strong> {aiResponse.mindsetCoach}
-              </div>
-
-              {/* Apply Schedule */}
               <button
                 onClick={applyScheduleAndUnlock}
                 className="w-full btn-primary py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(20,184,166,0.3)]"
@@ -586,7 +561,6 @@ const Dashboard = () => {
               </button>
             </div>
           )}
-
         </div>
       )}
 
@@ -594,284 +568,389 @@ const Dashboard = () => {
       {assessmentCompleted && (
         <div className="space-y-8 animate-in fade-in duration-500">
           
-          {/* Header Action Bar */}
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-slate-900/40 p-4 rounded-2xl border border-slate-800/80">
-            <div>
-              <h3 className="text-lg font-black text-white flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-teal-400" />
-                Academic Overview
-              </h3>
-              <p className="text-slate-400 text-xs mt-0.5">Real-time learning metrics, active streak shields & gamification rewards.</p>
+          {/* Welcome Panel & Quick Actions Row */}
+          <div className="glass-panel p-6 md:p-8 rounded-3xl border border-white/5 bg-gradient-to-r from-dark-900 via-[#191135]/30 to-dark-900 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-2">
+              <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight flex items-center gap-2">
+                Welcome back, {userName}! <span className="wave-hand animate-bounce">👋</span>
+              </h2>
+              <p className="text-slate-400 text-sm max-w-lg leading-relaxed">
+                Your study plan is fully active. The AI scheduler continues to calibrate your workload according to your progress and exam deadlines.
+              </p>
+              <div className="text-xs text-primary-400 font-bold flex items-center gap-1.5 pt-1">
+                <span className="w-2 h-2 rounded-full bg-primary-500 animate-pulse"></span>
+                Status: Dynamic Adaptation Mode Enabled
+              </div>
             </div>
 
-            <button
-              onClick={() => window.print()}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-200 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm self-start sm:self-auto"
-              title="Download formatted PDF academic progress report"
-            >
-              <Printer className="w-4 h-4 text-teal-400" />
-              Print / Save PDF Report
-            </button>
+            {/* Quick Action Buttons Grid */}
+            <div className="grid grid-cols-2 gap-3 max-w-sm w-full">
+              <Link to="/study" className="flex flex-col items-center justify-center p-3.5 bg-slate-900/60 border border-slate-800/80 hover:bg-slate-800/60 rounded-2xl hover:border-teal-500/40 text-center transition-all cursor-pointer group">
+                <BrainCircuit className="w-5 h-5 text-teal-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold text-white mt-1">Calendar Planner</span>
+              </Link>
+              <Link to="/exams" className="flex flex-col items-center justify-center p-3.5 bg-slate-900/60 border border-slate-800/80 hover:bg-slate-800/60 rounded-2xl hover:border-purple-500/40 text-center transition-all cursor-pointer group">
+                <BookOpen className="w-5 h-5 text-purple-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold text-white mt-1">Exam Prep Mode</span>
+              </Link>
+              <Link to="/study" className="flex flex-col items-center justify-center p-3.5 bg-slate-900/60 border border-slate-800/80 hover:bg-slate-800/60 rounded-2xl hover:border-orange-500/40 text-center transition-all cursor-pointer group">
+                <Clock className="w-5 h-5 text-orange-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold text-white mt-1">Syllabus Upload</span>
+              </Link>
+              <button 
+                onClick={handleResetAssessment}
+                className="flex flex-col items-center justify-center p-3.5 bg-slate-900/60 border border-slate-800/80 hover:bg-slate-800/60 rounded-2xl hover:border-slate-650 text-center transition-all cursor-pointer group"
+              >
+                <RefreshCw className="w-5 h-5 text-slate-400 group-hover:rotate-45 transition-transform" />
+                <span className="text-[10px] font-bold text-white mt-1">Retake Stress AI</span>
+              </button>
+            </div>
           </div>
 
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <div className="glass-panel p-5 rounded-2xl border border-white/5 flex items-center gap-4 bg-gradient-to-br from-dark-800 to-teal-950/10">
-              <div className="relative w-16 h-16 flex-shrink-0 flex items-center justify-center">
+          {/* Core Performance Analytics Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {/* 1. Today's Planned vs Completed Time */}
+            <div className="glass-panel p-5 rounded-2xl border border-white/5 bg-gradient-to-br from-dark-800 to-teal-950/5 flex items-center gap-4.5">
+              <div className="p-3.5 bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded-2xl">
+                <Clock className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Today's Study Load</p>
+                <h4 className="text-lg font-black text-white">{todayCompletedHours}h / {todayPlannedHours}h</h4>
+                <p className="text-[10px] text-slate-500 font-semibold">Planned Hours vs. Completed</p>
+              </div>
+            </div>
+
+            {/* 2. Today's Study Progress */}
+            <div className="glass-panel p-5 rounded-2xl border border-white/5 bg-gradient-to-br from-dark-800 to-primary-950/5 flex items-center gap-4.5">
+              <div className="relative w-14 h-14 flex-shrink-0 flex items-center justify-center">
                 <svg className="w-full h-full transform -rotate-90">
-                  <circle cx="32" cy="32" r="26" className="stroke-slate-850" strokeWidth="5" fill="transparent" />
+                  <circle cx="28" cy="28" r="23" className="stroke-slate-850" strokeWidth="4.5" fill="transparent" />
                   <circle
-                    cx="32"
-                    cy="32"
-                    r="26"
-                    className="stroke-primary-500 transition-all duration-500 shadow-[0_0_12px_rgba(20,184,166,0.5)]"
-                    strokeWidth="5"
+                    cx="28"
+                    cy="28"
+                    r="23"
+                    className="stroke-primary-500 transition-all duration-500"
+                    strokeWidth="4.5"
                     fill="transparent"
-                    strokeDasharray={2 * Math.PI * 26}
-                    strokeDashoffset={2 * Math.PI * 26 * (1 - progressPercentage / 100)}
+                    strokeDasharray={2 * Math.PI * 23}
+                    strokeDashoffset={2 * Math.PI * 23 * (1 - (totalTasksCount > 0 ? (completedTasksCount / totalTasksCount) : 0))}
                     strokeLinecap="round"
                   />
                 </svg>
-                <span className="absolute font-black text-white text-xs">{progressPercentage}%</span>
+                <span className="absolute font-black text-white text-[11px]">
+                  {totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0}%
+                </span>
               </div>
-              <div>
+              <div className="space-y-0.5">
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Today's Progress</p>
-                <h4 className="text-base font-extrabold text-white mt-0.5">{completedTasks}/{totalTasks} Tasks Done</h4>
-                <Link to="/study" className="text-[11px] text-primary-400 hover:text-primary-300 hover:underline flex items-center gap-0.5 mt-1 font-semibold transition-colors">
-                  Open study tracker <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
+                <h4 className="text-base font-extrabold text-white">{completedTasksCount}/{totalTasksCount} Tasks Done</h4>
+                <p className="text-[10px] text-slate-500 font-semibold">Completion of today's workload</p>
               </div>
             </div>
 
-            <div className="glass-panel p-5 rounded-2xl border border-white/5 flex items-center gap-4 bg-gradient-to-br from-dark-800 to-purple-950/10">
-              <div className="p-3.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-xl shadow-lg">
-                <Clock className="w-6 h-6 animate-pulse" />
+            {/* 3. Overall Study Progress */}
+            <div className="glass-panel p-5 rounded-2xl border border-white/5 bg-gradient-to-br from-dark-800 to-purple-950/5 flex items-center gap-4.5">
+              <div className="p-3.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-2xl">
+                <Trophy className="w-6 h-6 text-purple-400" />
               </div>
-              <div>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Hours Tracked Today</p>
-                <h4 className="text-base font-extrabold text-white mt-0.5">{todayHours.toFixed(1)} hrs / {targetHours.toFixed(0)}h</h4>
-                <div className="w-28 bg-slate-900 h-1.5 rounded-full mt-2 overflow-hidden border border-slate-800">
-                  <div className="bg-purple-400 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min((todayHours / targetHours) * 100, 100)}%` }}></div>
+              <div className="space-y-1.5 flex-1">
+                <div className="flex justify-between items-center">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Overall Plan Progress</p>
+                  <span className="text-[10px] text-purple-400 font-mono font-black">{progressPercentage}%</span>
                 </div>
+                <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden border border-slate-850">
+                  <div className="bg-purple-400 h-full rounded-full transition-all duration-500" style={{ width: `${progressPercentage}%` }}></div>
+                </div>
+                <p className="text-[9px] text-slate-500 font-semibold">Completion across whole schedule</p>
               </div>
             </div>
 
-            <div className="glass-panel p-5 rounded-2xl border border-white/5 flex items-center gap-4 bg-gradient-to-br from-dark-800 to-orange-950/10">
-              <div className="p-3.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded-xl shadow-lg">
-                <Flame className="w-6 h-6 animate-bounce" />
+            {/* 4. Active Study Streak */}
+            <div className="glass-panel p-5 rounded-2xl border border-white/5 bg-gradient-to-br from-dark-800 to-orange-950/5 flex items-center gap-4.5">
+              <div className="p-3.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded-2xl">
+                <Flame className="w-6 h-6 animate-pulse" />
               </div>
-              <div>
+              <div className="space-y-1">
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Study Streak Shield</p>
                 <h4 className="text-base font-extrabold text-white mt-0.5">{streak} Days 🔥</h4>
-                <p className="text-[10px] text-emerald-400 mt-1 font-semibold flex items-center gap-1">
+                <p className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
                   <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
-                  Streak Shield Active
+                  Active Shield Shield Enabled
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Grid area */}
+          {/* Primary Layout Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             
-            {/* LEFT 7 COLUMNS: Task checklist and AI blueprints */}
+            {/* LEFT 7 COLUMNS: Schedule, Missed Session Banner & AI Recommendations */}
             <div className="lg:col-span-7 space-y-8">
               
-              {/* Daily Checklist Tasks Preview */}
+              {/* Missed Sessions Adaptive Shield Banner */}
+              {missedSessions.length > 0 && (
+                <div className="glass-panel p-6 rounded-2xl border border-red-500/20 bg-gradient-to-r from-red-500/5 via-[#1a0808]/20 to-red-500/5 space-y-4">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl">
+                      <ShieldAlert className="w-6 h-6 text-red-400 animate-pulse" />
+                    </div>
+                    <div className="space-y-1 flex-1">
+                      <h4 className="font-extrabold text-sm text-red-300">Missed Study Sessions Detected</h4>
+                      <p className="text-xs text-slate-355 leading-relaxed">
+                        You have <strong>{missedSessions.length} uncompleted study task(s)</strong> from previous days. The AI scheduler can automatically rebalance your remaining workload to preserve deadlines without exceeding daily hours limit.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-red-500/10">
+                    <div className="text-[10px] text-slate-500 font-mono font-semibold">
+                      Missed topics: {missedSessions.slice(0, 2).map(t => t.chapterName).join(", ")}{missedSessions.length > 2 ? '...' : ''}
+                    </div>
+                    <button
+                      onClick={handleDashboardRebalance}
+                      disabled={loadingPlan}
+                      className="px-3.5 py-2 rounded-xl bg-red-650 hover:bg-red-600 border border-red-500/30 text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                    >
+                      {loadingPlan ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5 text-white" />
+                      )}
+                      🤖 AI Auto-Rebalance Plan
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Today's Schedule Tasks Checklist */}
               <div className="glass-panel rounded-2xl p-6 border border-white/5 space-y-5">
                 <div className="flex justify-between items-center pb-3 border-b border-slate-850">
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
                     <ListTodo className="w-5 h-5 text-teal-400" />
                     Today's Study Checklist
                   </h3>
-                  <Link to="/study" className="text-xs text-primary-400 hover:text-primary-300 font-semibold flex items-center gap-0.5">
-                    View Planner <ArrowRight className="w-3 h-3" />
-                  </Link>
+                  <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700">
+                    {completedTasksCount} / {totalTasksCount} Complete
+                  </span>
                 </div>
 
-                <div className="space-y-3.5">
-                  {tasks.slice(0, 3).map(task => (
-                    <div
-                      key={task.id}
-                      onClick={() => {
-                        setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: !t.completed } : t));
-                      }}
-                      className={`p-3 bg-slate-900/40 border rounded-xl flex items-center justify-between cursor-pointer hover:bg-slate-900/70 transition-all ${
-                        task.completed 
-                          ? 'border-slate-850 opacity-60 text-slate-500' 
-                          : 'border-slate-800 text-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
-                          task.completed 
-                            ? 'bg-emerald-500 border-emerald-500 text-white' 
-                            : 'border-slate-500 hover:border-teal-400'
-                        }`}>
-                          {task.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                        </div>
-                        <span className={`text-xs font-semibold ${task.completed ? 'line-through' : ''}`}>
-                          {task.text}
-                        </span>
-                      </div>
-                      <span className="text-[9px] uppercase tracking-wider font-extrabold text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-                        {task.category}
-                      </span>
+                <div className="space-y-3">
+                  {loadingPlan ? (
+                    <div className="space-y-2 py-4">
+                      <div className="h-10 bg-slate-800/40 rounded-xl animate-pulse"></div>
+                      <div className="h-10 bg-slate-800/40 rounded-xl animate-pulse"></div>
                     </div>
-                  ))}
-                  {tasks.length === 0 && (
-                    <p className="text-slate-500 text-xs py-4 text-center">No tasks scheduled for today.</p>
+                  ) : activeTasksList.length > 0 ? (
+                    activeTasksList.map((task, idx) => {
+                      const isDone = activePlan ? task.isCompleted : task.completed;
+                      
+                      return (
+                        <div
+                          key={task.id || idx}
+                          onClick={() => handleToggleTask(task, idx)}
+                          className={`p-3.5 bg-slate-900/40 border rounded-xl flex items-center justify-between cursor-pointer hover:bg-slate-900/70 transition-all group ${
+                            isDone 
+                              ? 'border-slate-850 opacity-60 text-slate-500 bg-[#0e1610]/10' 
+                              : 'border-slate-800 text-slate-200 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
+                              isDone 
+                                ? 'bg-emerald-500 border-emerald-500 text-white' 
+                                : 'border-slate-500 group-hover:border-teal-400'
+                            }`}>
+                              {isDone && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                            </div>
+                            <div className="text-xs">
+                              <span className={`font-semibold ${isDone ? 'line-through' : ''}`}>
+                                {task.text || task.chapterName}
+                              </span>
+                              {task.estimatedHours && (
+                                <span className="text-[10px] text-slate-500 block font-semibold mt-0.5">Duration: {task.estimatedHours} hour(s)</span>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            {task.isRevision && (
+                              <span className="text-[9px] uppercase tracking-wider font-extrabold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                                Revision
+                              </span>
+                            )}
+                            <span className="text-[9px] uppercase tracking-wider font-extrabold text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                              {task.category || task.subjectName || "Study"}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-8 bg-slate-950/20 border border-dashed border-slate-850 rounded-xl space-y-2">
+                      <Smile className="w-8 h-8 text-slate-500 mx-auto" />
+                      <p className="text-slate-500 text-xs font-semibold">No tasks scheduled for today! Enjoy your break day. 🎉</p>
+                    </div>
                   )}
                 </div>
               </div>
 
-              {/* Active AI Study Guide explanation */}
-              {aiResponse && (
-                <div className="glass-panel rounded-2xl p-6 border border-white/5 space-y-4 bg-gradient-to-br from-dark-800 to-purple-950/5">
-                  <div className="flex justify-between items-center pb-3 border-b border-slate-850">
-                    <h3 className="text-base font-bold text-white flex items-center gap-2">
-                      <Brain className="w-5 h-5 text-purple-400 animate-pulse" />
-                      Active AI Concept Summary
-                    </h3>
-                    <span className="text-[10px] font-bold text-teal-450 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20">
-                      {aiResponse.examSubject}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-xs text-slate-300 leading-relaxed bg-[#0c1220] p-4 border border-slate-850 rounded-xl font-medium">
-                      {aiResponse.explanation}
-                    </p>
-                  </div>
-
-                  <div className="p-3.5 bg-purple-500/5 rounded-xl border border-purple-500/15 text-xs text-slate-350 leading-relaxed">
-                    <strong>Coach advice:</strong> {aiResponse.mindsetCoach}
-                  </div>
-                </div>
-              )}
-
-              {/* Rerun questionnaire banner */}
-              <div className="glass-panel p-6 rounded-2xl border border-white/5 bg-gradient-to-tr from-dark-900 via-primary-950/5 to-purple-950/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h4 className="font-bold text-white text-sm">Need a new plan generated?</h4>
-                  <p className="text-slate-400 text-xs mt-0.5">Retake the AI evaluation to load custom solutions for another course.</p>
-                </div>
-                <button
-                  onClick={handleResetAssessment}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-semibold text-xs flex items-center justify-center gap-2 hover:bg-slate-750 transition-all cursor-pointer"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Retake AI Assessment
-                </button>
-              </div>
-
-              {/* Gamification Achievement Badges Showcase */}
-              <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4 bg-gradient-to-br from-dark-800 via-purple-950/10 to-teal-950/10">
+              {/* Dynamic AI Study Recommendations & Insights */}
+              <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-5">
                 <div className="flex justify-between items-center pb-3 border-b border-slate-850">
                   <div>
                     <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                      <Award className="w-5 h-5 text-amber-400" />
-                      Gamification Badges & Rewards
+                      <Brain className="w-5 h-5 text-purple-400" />
+                      🤖 AI Study recommendations
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">Unlock badges by completing study streaks, pomodoros & quizzes.</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Real-time coaching recommendations based on mastery and quiz accuracy.</p>
                   </div>
-                  <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
-                    4 / 5 Unlocked
-                  </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {[
-                    { id: 1, name: "Pomodoro Scholar", desc: "Completed 5+ focus sessions", unlocked: todayHours >= 1.0, icon: "🧠" },
-                    { id: 2, name: "Streak Warrior", desc: "Achieved 3+ day streak", unlocked: streak >= 3, icon: "🔥" },
-                    { id: 3, name: "PDF Mastermind", desc: "Parsed syllabus PDF with AI", unlocked: true, icon: "📑" },
-                    { id: 4, name: "Quiz Champion", desc: "Passed AI practice quiz", unlocked: true, icon: "🎯" },
-                    { id: 5, name: "Subject Strategist", desc: "Added 3+ course subjects", unlocked: (exams?.length || 0) >= 2, icon: "📚" }
-                  ].map(badge => (
-                    <div
-                      key={badge.id}
-                      className={`p-3 rounded-xl border flex flex-col justify-between transition-all ${
-                        badge.unlocked
-                          ? 'bg-slate-900/80 border-amber-500/30 text-slate-200 shadow-md hover:scale-105'
-                          : 'bg-slate-950/30 border-slate-850 text-slate-500 opacity-60'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-2xl">{badge.icon}</span>
-                        <span className={`text-[8px] uppercase font-mono font-extrabold px-1.5 py-0.5 rounded ${
-                          badge.unlocked ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-slate-850 text-slate-600'
-                        }`}>
-                          {badge.unlocked ? 'Unlocked' : 'Locked'}
-                        </span>
-                      </div>
-                      <div className="mt-2">
-                        <h5 className="font-bold text-xs text-white truncate">{badge.name}</h5>
-                        <p className="text-[10px] text-slate-400 mt-0.5 truncate">{badge.desc}</p>
-                      </div>
+                <div className="space-y-4">
+                  {loadingInsights ? (
+                    <div className="space-y-3">
+                      <div className="h-16 bg-slate-800/40 rounded-xl animate-pulse"></div>
+                      <div className="h-16 bg-slate-800/40 rounded-xl animate-pulse"></div>
                     </div>
-                  ))}
+                  ) : aiInsights.length > 0 ? (
+                    aiInsights.map((insight, idx) => {
+                      const isWarning = insight.level === 'warning';
+                      const isTip = insight.level === 'tip';
+                      
+                      return (
+                        <div
+                          key={idx}
+                          className={`p-4 rounded-xl border text-xs flex gap-3.5 transition-all ${
+                            isWarning 
+                              ? 'bg-red-500/5 border-red-500/10 text-red-300' 
+                              : isTip 
+                              ? 'bg-purple-500/5 border-purple-500/10 text-purple-300' 
+                              : 'bg-emerald-500/5 border-emerald-500/10 text-emerald-300'
+                          }`}
+                        >
+                          <div className={`p-2 rounded-xl flex-shrink-0 ${
+                            isWarning ? 'bg-red-500/10 text-red-400' : isTip ? 'bg-purple-500/10 text-purple-400' : 'bg-emerald-500/10 text-emerald-400'
+                          }`}>
+                            <Sparkles className="w-4.5 h-4.5" />
+                          </div>
+                          <div>
+                            <h5 className="font-extrabold text-white mb-0.5">{insight.title}</h5>
+                            <p className="leading-relaxed font-semibold text-slate-350">{insight.advice}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="p-4 bg-slate-900/30 border border-slate-850 rounded-xl text-center text-slate-500">
+                      AI is compiling study metrics. Log a quiz or complete checklist items to activate tips.
+                    </div>
+                  )}
                 </div>
               </div>
 
             </div>
-
-            {/* RIGHT 5 COLUMNS: Leaderboard and count-down timelines */}
+            
+            {/* RIGHT 5 COLUMNS: Upcoming Exams, Streaks & Gamification */}
             <div className="lg:col-span-5 space-y-8">
               
-              {/* Gamified Leaderboard */}
+              {/* Upcoming Exams Countdown Timeline */}
               <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4">
-                <div className="pb-3 border-b border-slate-850">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-purple-400" />
-                    College Consistency Leaderboard
-                  </h3>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Weekly study streak ranking of your class</p>
+                <div className="flex justify-between items-center pb-2 border-b border-slate-850">
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <CalendarIcon className="w-4 h-4 text-teal-400" />
+                      Upcoming Exams Timeline
+                    </h3>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Days remaining count to examination day</p>
+                  </div>
+                  <Link to="/exams" className="text-xs text-primary-400 hover:text-primary-350 font-semibold flex items-center gap-0.5">
+                    Exam Mode <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
                 </div>
 
-                <div className="space-y-2.5">
-                  {[
-                    { rank: 1, name: "Sarah Jenkins", streak: 24, status: "🔥" },
-                    { rank: 2, name: "David Kim", streak: 18, status: "🔥" },
-                    { rank: 3, name: "Aisha Patel", streak: 14, status: "🔥" },
-                    { rank: 4, name: "You (User)", streak: streak, status: "🔥", highlight: true },
-                    { rank: 5, name: "Alex Mercer", streak: 7, status: "👍" }
-                  ].map(student => (
-                    <div
-                      key={student.rank}
-                      className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all ${
-                        student.highlight
-                          ? 'bg-primary-500/10 border-primary-500/30 text-white shadow-[0_0_15px_rgba(20,184,166,0.1)]'
-                          : 'bg-slate-900/30 border-slate-850 text-slate-350'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] ${
-                          student.rank === 1 ? 'bg-amber-500 text-dark-900 shadow-md' :
-                          student.rank === 2 ? 'bg-slate-300 text-dark-900' :
-                          student.rank === 3 ? 'bg-amber-800 text-white' : 'bg-slate-800 text-slate-400'
+                <div className="space-y-3">
+                  {exams.slice(0, 3).map(exam => {
+                    const daysLeft = getDaysRemaining(exam.date);
+                    const isUrgent = daysLeft <= 3 && daysLeft >= 0;
+                    
+                    return (
+                      <div key={exam.id} className="p-3 bg-slate-900/30 border border-slate-800/80 rounded-xl flex justify-between items-center text-xs">
+                        <div>
+                          <span className="text-[9px] font-bold text-teal-400 bg-teal-500/5 px-2 py-0.5 rounded border border-teal-500/20">{exam.subject}</span>
+                          <p className="font-semibold text-slate-200 mt-1">{exam.name}</p>
+                        </div>
+                        <span className={`font-bold px-2.5 py-1 rounded text-[11px] ${
+                          isUrgent 
+                            ? 'bg-red-500/10 text-red-400 border border-red-500/25 animate-pulse' 
+                            : daysLeft < 0 
+                            ? 'bg-slate-850 text-slate-500' 
+                            : 'bg-slate-800 text-slate-300'
                         }`}>
-                          {student.rank}
+                          {daysLeft > 0 ? `${daysLeft} Days Left` : daysLeft === 0 ? "Today" : "Completed"}
                         </span>
-                        <span className={`font-semibold ${student.highlight ? 'text-primary-400' : ''}`}>{student.name}</span>
                       </div>
-                      <span className="font-bold flex items-center gap-1">
-                        {student.streak} Days {student.status}
-                      </span>
+                    );
+                  })}
+                  {exams.length === 0 && (
+                    <div className="text-center py-4 text-xs text-slate-500">
+                      No exams configured. Add them in Exam Mode!
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
 
-              {/* Streak Tracker Visual Checklist */}
+              {/* Weakest Subjects / Mastery Logs */}
               <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4">
                 <div className="pb-3 border-b border-slate-850">
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Flame className="w-4 h-4 text-orange-400" />
-                    Weekly Check-in logs
+                    <Trophy className="w-4 h-4 text-amber-400" />
+                    Subject Mastery Monitor
                   </h3>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Study streaks recorded for current week</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Average progress percentage per active course</p>
                 </div>
 
+                <div className="space-y-3.5">
+                  {subjects.length > 0 ? (
+                    subjects.slice(0, 3).map(subj => {
+                      const subjTasks = allPlanTasks.filter(t => t.subjectName === subj.name);
+                      const subjCompleted = subjTasks.filter(t => t.isCompleted).length;
+                      const subjProgress = subjTasks.length > 0 ? Math.round((subjCompleted / subjTasks.length) * 100) : 40;
+                      
+                      return (
+                        <div key={subj.id || subj.name} className="space-y-1.5 text-xs">
+                          <div className="flex justify-between items-center text-slate-350">
+                            <span className="font-semibold">{subj.name}</span>
+                            <span className="font-bold text-[10px] font-mono">{subjProgress}% Mastery</span>
+                          </div>
+                          <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden border border-slate-850">
+                            <div 
+                              className="h-full rounded-full transition-all duration-500" 
+                              style={{ 
+                                width: `${subjProgress}%`, 
+                                backgroundColor: subj.color || '#a855f7' 
+                              }}
+                            ></div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-4 text-xs text-slate-500">
+                      No course subjects loaded. Add them in Subjects tab!
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Gamified Weekly Consistency Grid */}
+              <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4">
+                <div className="pb-3 border-b border-slate-850">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Award className="w-4 h-4 text-purple-400" />
+                    Weekly Check-in logs
+                  </h3>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Consistency streaks recorded for current week</p>
+                </div>
                 <div className="grid grid-cols-7 gap-2 text-center text-[10px]">
                   {[
                     { label: "M", done: true },
@@ -896,46 +975,37 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              {/* Exam previews */}
-              <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-850">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <CalendarIcon className="w-4 h-4 text-teal-400" />
-                    Exams List Preview
-                  </h3>
-                  <Link to="/exams" className="text-xs text-primary-400 hover:text-primary-305 font-semibold flex items-center gap-0.5">
-                    View All <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-
-                <div className="space-y-3">
-                  {exams.slice(0, 3).map(exam => {
-                    const daysLeft = getDaysRemaining(exam.date);
-                    const isUrgent = daysLeft <= 3 && daysLeft >= 0;
-                    
-                    return (
-                      <div key={exam.id} className="p-3 bg-slate-900/30 border border-slate-800/80 rounded-xl flex justify-between items-center text-xs">
-                        <div>
-                          <span className="text-[9px] font-bold text-teal-400 bg-teal-500/5 px-2 py-0.5 rounded border border-teal-500/20">{exam.subject}</span>
-                          <p className="font-semibold text-slate-200 mt-1">{exam.name}</p>
-                        </div>
-                        <span className={`font-bold px-2 py-1 rounded ${
-                          isUrgent ? 'bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse' : 'bg-slate-800 text-slate-400'
-                        }`}>
-                          {daysLeft > 0 ? `${daysLeft} days` : daysLeft === 0 ? "Today" : "Done"}
-                        </span>
-                      </div>
-                    );
-                  })}
-                  {exams.length === 0 && (
-                    <p className="text-slate-500 text-xs py-2 text-center">No exams scheduled.</p>
-                  )}
-                </div>
-              </div>
-
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* AI Rebalance Results Alert Modal */}
+      {rebalanceResult.isOpen && (
+        <div className="fixed inset-0 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
+          <div className="glass-panel border border-white/10 p-6 rounded-2xl w-full max-w-md relative z-10 shadow-2xl animate-in zoom-in-95 duration-200 space-y-4 bg-gradient-to-tr from-dark-950 via-[#13072e]/20 to-dark-900">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-xl">
+                <Sparkles className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">{rebalanceResult.title}</h3>
+                <p className="text-xs text-slate-400">Adaptive AI Schedule Updates</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-350 bg-[#0c1220] p-4 border border-slate-850 rounded-xl leading-relaxed font-semibold">
+              {rebalanceResult.explanation}
+            </p>
+
+            <button
+              onClick={() => setRebalanceResult(prev => ({ ...prev, isOpen: false }))}
+              className="w-full btn-primary py-2.5 rounded-xl text-xs font-bold cursor-pointer"
+            >
+              Return to Dashboard
+            </button>
+          </div>
         </div>
       )}
 
