@@ -193,6 +193,8 @@ const Exams = () => {
             <h4 className="text-2xl font-black text-white mt-1">
               {exams.filter(e => getDaysRemaining(e.date) <= 3 && getDaysRemaining(e.date) >= 0).length} Exams
             </h4>
+          </div>
+        </div>
       </div>
       {/* Main Content Layout */}
       <div className="glass-panel rounded-2xl p-6 border border-white/5">
