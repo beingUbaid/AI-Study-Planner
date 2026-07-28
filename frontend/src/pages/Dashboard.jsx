@@ -595,7 +595,7 @@ const Dashboard = () => {
         <div className="space-y-8 animate-in fade-in duration-500">
           
           {/* Header Action Bar */}
-          <div className="flex justify-between items-center bg-slate-900/40 p-4 rounded-2xl border border-slate-800/80">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-slate-900/40 p-4 rounded-2xl border border-slate-800/80">
             <div>
               <h3 className="text-lg font-black text-white flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-teal-400" />
@@ -606,7 +606,7 @@ const Dashboard = () => {
 
             <button
               onClick={() => window.print()}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-200 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-sm"
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-200 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm self-start sm:self-auto"
               title="Download formatted PDF academic progress report"
             >
               <Printer className="w-4 h-4 text-teal-400" />

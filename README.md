@@ -1,77 +1,79 @@
-# 🎓 AI Study Planner — Smart AI Learning & Schedule Assistant
+# 🎓 AI Study Planner — Smart Adaptive Learning & Schedule Assistant
 
-[![React 19](https://img.shields.io/badge/Frontend-React%2019%20%7C%20Vite%20%7C%20Tailwind-61DAFB?logo=react)](https://react.dev)
-[![Node.js](https://img.shields.io/badge/Backend-Node.js%20%7C%20Express%20%7C%20MongoDB-339933?logo=nodedotjs)](https://nodejs.org)
-[![Groq AI](https://img.shields.io/badge/AI%20Engine-Groq%20Llama%203.1--8B-purple)](https://groq.com)
-[![Deployment](https://img.shields.io/badge/Deployment-Vercel%20%2B%20Render-black)](https://vercel.com)
-
-**AI Study Planner** is a full-stack, AI-powered productivity platform designed to help students transform unstructured course syllabi into adaptive daily study schedules, interactive practice flashcards, and self-testing quizzes.
+<div align="center">
+  <br />
+  
+  [![React 19](https://img.shields.io/badge/Frontend-React%2019%20%7C%20Vite%20%7C%20Tailwind-61DAFB?logo=react&logoColor=white&style=for-the-badge)](https://react.dev)
+  [![Node.js](https://img.shields.io/badge/Backend-Node.js%20%7C%20Express%20%7C%20MongoDB-339933?logo=nodedotjs&logoColor=white&style=for-the-badge)](https://nodejs.org)
+  [![Groq AI](https://img.shields.io/badge/AI%20Engine-Groq%20Llama%25203--8B-purple?logo=meta&logoColor=white&style=for-the-badge)](https://groq.com)
+  
+  <br />
+  
+  <a href="https://ai-study-planner.vercel.app">
+    <img src="https://img.shields.io/badge/🚀%20Live%20Demo-Explore%20App-teal?style=for-the-badge&logo=vercel" alt="Live Demo" />
+  </a>
+  <a href="https://github.com/beingUbaid/AI-Study-Planner">
+    <img src="https://img.shields.io/badge/⭐%20Star%20Repo-Support%20Us-purple?style=for-the-badge&logo=github" alt="Star Repo" />
+  </a>
+</div>
 
 ---
 
-## 🔗 Live Demo & Links
+## 📖 Project Overview
 
-- 🌐 **Live Application**: [https://ai-study-planner.vercel.app](https://ai-study-planner.vercel.app) *(Deploying via Vercel & Render)*
-- 📦 **GitHub Repository**: [https://github.com/beingUbaid/AI-Study-Planner](https://github.com/beingUbaid/AI-Study-Planner)
+**AI Study Planner** is a modern full-stack, AI-powered productivity platform designed to help students transform complex, unstructured course syllabi into adaptive, optimized study blueprints. Using state-of-the-art LLMs, the platform identifies chapters, suggests study hour distributions, structures active-recall flashcards/quizzes, and dynamically rebalances study tasks when deadlines are missed.
+
+### 🔄 How It Works
+
+```mermaid
+graph TD
+    A[📄 Upload Syllabus PDF] --> B[🧠 AI Analyzes Topics & chapters]
+    B --> C[📅 Generate Personalized Study Plan]
+    C --> D[🎯 Track Daily Progress & Checklists]
+    D -->|Missed study block?| E[🔄 AI Auto-Rebalances Remaining Days]
+    E --> C
+    D -->|Exam approach?| F[🎓 Calibrate 'Before Exam' Countdown Mode]
+```
+
+---
+
+## 🔐 Demo Credentials
+
+Skip registration and explore the platform instantly using the credentials below:
+
+- **Email**: `demo@example.com`
+- **Password**: `Password123`
 
 ---
 
 ## 🌟 Key Features
 
 ### 1. 🤖 Adaptive AI Schedule Generation & Plan Rebalancing
-- **Syllabus PDF Parser**: Drag & drop course syllabus PDFs. Groq AI extracts chapter titles, estimated study hours, and topics automatically.
-- **Adaptive Rebalancing Engine**: Missed yesterday's 2-hour study session? The AI dynamically shifts uncompleted tasks into remaining study days without overloading your schedule.
+* **Syllabus Parser**: Drag & drop a syllabus PDF (up to 10MB). Groq AI extracts chapter titles and schedules study days.
+* **Study Blueprint Explanation**: Each plan generated is backed by a bulleted AI logic card detailing why chapters were mapped to specific dates.
+* **Auto-Rebalancing Engine**: Tutors classify student queries (e.g. *"I missed yesterday's study"*) and automatically shift uncompleted study blocks forward into future days.
 
 ### 2. ⚡ AI Active-Recall Flashcards & Self-Testing Quizzes
-- **3D Flip Flashcards**: Generate high-yield active-recall cards per subject and topic with 3D flip card animations.
-- **Auto-Graded Quizzes**: Take interactive multiple-choice practice quizzes with step-by-step AI answer explanations.
+* **3D Flip Flashcards**: Generate high-yield study cards for active recall.
+* **Self-Evaluation Quizzes**: Take interactive multiple-choice practice quizzes with step-by-step AI answer explanations.
 
-### 3. 🎙️ Voice Input (Speech-to-Text) Hands-Free AI Tutor
-- Speak questions directly into the AI Chatbot using Web Speech API voice recognition.
-- Get instant academic explanations with embedded YouTube lecture recommendations.
+### 3. 🎙️ Voice-Activated AI Study Chatbot
+* Speak queries hands-free. The tutor responds with academic definitions and embedded YouTube video lectures.
 
-### 4. 📅 Calendar Integration & iCal Export
-- Sync study tasks directly into **Google Calendar**, **Apple Calendar**, or **Outlook** using 1-click `.ics` export or direct Google Calendar URLs.
+### 4. 🎯 "Before Exam" Countdown Mode
+* Select an exam date and subjects to generate a high-intensity study roadmap block-by-block leading up to test day.
 
-### 5. 🏆 Gamification & Progress Analytics
-- **Gamification Badges**: Earn unlockable badges (*Pomodoro Scholar*, *Streak Warrior*, *PDF Mastermind*, *Quiz Champion*).
-- **Printable PDF Reports**: Download formatted academic progress reports to print or save.
+### 5. 📊 Analytics, Streaks & Mastery Logs
+* **AI recommendations**: 3 dynamic performance cards suggesting revision shifts.
+* **Cognitive Safety Meter**: Gauge fatigue indices based on pending tasks and hours.
 
 ---
 
 ## 🛠️ Tech Stack
 
-### Frontend
-- **Framework**: React 19 (Vite)
-- **Styling**: Vanilla Tailwind CSS + Glassmorphism Dark Theme
-- **Icons**: Lucide React
-- **Routing**: React Router 7
-
-### Backend
-- **Server**: Node.js & Express 5
-- **Database**: MongoDB Atlas & Mongoose
-- **Authentication**: Passport.js (Google OAuth 2.0) & JWT
-- **AI SDK**: Groq SDK (`llama-3.1-8b-instant`)
-- **File Processing**: Multer & pdf-parse
-
----
-
-## 🏛️ System Architecture
-
-```
-┌────────────────────────────────────────────────────────┐
-│                      Client (React 19)                 │
-│   Dashboard │ AI Tutor │ Study Tracker │ Calendar      │
-└───────────────────────────┬────────────────────────────┘
-                            │ REST API / JWT
-┌───────────────────────────▼────────────────────────────┐
-│                  Node.js / Express 5 API               │
-│   Auth Controller  │  Planner Engine  │  AI Controller │
-└─────────┬─────────────────┬───────────────────┬────────┘
-          │                 │                   │
-   MongoDB Atlas        Groq LLM SDK       Google OAuth
-   (User & Schedule)  (PDF & Quizzes)    (Authentication)
-```
+* **Frontend**: React 19 (Vite), Tailwind CSS (Glassmorphic Theme), Lucide Icons
+* **Backend**: Node.js & Express, MongoDB Atlas & Mongoose, Passport.js (JWT)
+* **AI Model**: Groq SDK (`llama-3.1-8b-instant`)
 
 ---
 
@@ -86,29 +88,20 @@ AI-Study-Planner/
 │   │   ├── models/           # Mongoose Schemas (User, Subject, Chapter, StudyPlan)
 │   │   ├── routes/           # REST API Route Definitions
 │   │   └── utils/            # Schedule generation & Email sending utilities
-│   ├── .env.example          # Backend environment variable template
+│   ├── tests/                # Unit test suites (planner.test.js)
 │   └── index.js              # Server entry point
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── components/       # Reusable UI components (Logo, FlashcardsQuizModal, VoiceInputButton)
-│   │   ├── pages/            # Application views (Dashboard, CalendarPlanner, StudyTracker, AIAssistant)
+│   │   ├── components/       # Reusable UI components (Logo, Pomodoro, Sidebar)
+│   │   ├── pages/            # Views (Dashboard, CalendarPlanner, StudyTracker, Exams)
 │   │   └── services/         # Centralized API service methods
-│   ├── .env.example          # Frontend environment variable template
 │   └── index.html            # Vite HTML entry point
-│
-├── .gitignore                # Environment & build exclusions
-└── README.md                 # Project documentation
 ```
 
 ---
 
 ## ⚙️ How to Run Locally
-
-### Prerequisites
-- Node.js (v18+)
-- MongoDB Atlas account or local MongoDB instance
-- Groq API Key
 
 ### 1. Clone Repository
 ```bash
@@ -121,7 +114,7 @@ cd AI-Study-Planner
 cd backend
 npm install
 cp .env.example .env
-# Edit .env with your MONGO_URI, JWT_SECRET, and GROQ_API_KEY
+# Edit .env and supply your MONGO_URI, JWT_SECRET, and GROQ_API_KEY
 npm run dev
 ```
 
@@ -130,20 +123,19 @@ npm run dev
 cd ../frontend
 npm install
 cp .env.example .env
+# Edit .env and point VITE_API_URL to http://localhost:5000/api
 npm run dev
 ```
-Open **http://localhost:5173** in your browser!
 
 ---
 
-## 👨‍💻 Team & Contributions
+## 🧪 Testing
 
-- **Ubaid (Frontend Lead & AI Integrations)**:
-  - Designed & developed the React 19 UI, component hierarchy, and glassmorphism styling.
-  - Implemented Web Speech API voice input, Flashcards & Quiz modal, and calendar export features.
-  - Handled client-side state management, responsive navigation, and error handling.
-- **Backend Collaborator**:
-  - Implemented Express REST API routes, Mongoose database schemas, and Nodemailer email verification.
+Run backend scheduler unit tests locally:
+```bash
+cd backend
+node tests/planner.test.js
+```
 
 ---
 

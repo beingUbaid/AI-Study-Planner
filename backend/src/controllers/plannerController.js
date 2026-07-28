@@ -2,6 +2,12 @@ import Subject from '../models/Subject.js'
 import Chapter from '../models/Chapter.js'
 import StudyPlan from '../models/StudyPlan.js'
 import { generateSchedule, detectBurnout } from '../utils/plannerLogic.js'
+import { rebalanceStudyPlan } from '../utils/rebalanceHelper.js'
+import Groq from 'groq-sdk'
+
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY
+})
 
 // ─────────────────────────────────────────
 // ADD CHAPTERS TO A SUBJECT
@@ -119,6 +125,42 @@ export const generatePlan = async (req, res) => {
     // check for burnout
     const burnout = detectBurnout(schedule, dailyStudyHours)
 
+    // Generate AI explanation
+    let aiExplanation = ''
+    try {
+      const subjectContext = validSubjects.map(s => {
+        const daysLeft = s.examDate ? Math.ceil((new Date(s.examDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) : 'N/A'
+        return `${s.name} (exam in ${daysLeft} days)`
+      }).join(', ')
+
+      const completion = await groq.chat.completions.create({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert academic advisor and AI Study Planner.
+            The student has generated a study schedule. Analyze their subject priority and explain why this plan is optimized for them.
+            
+            Subjects: ${subjectContext}
+            Daily Study Hours: ${dailyStudyHours} hours/day.
+            Total Days of generated schedule: ${schedule.length} days.
+            
+            Generate a short, bullet-point explanation (maximum 4 points) of why this plan was structured this way:
+            - Highlight why certain subjects are prioritized (e.g. exams coming up sooner).
+            - Highlight study time distribution based on difficulty or progress.
+            - Mention that revision days have been strategically added.
+            - Keep it encouraging, professional, and clear.
+            - Return clean markdown format. Do NOT include any markdown code blocks or wrapper tags around it, just the raw text.`
+          }
+        ],
+        max_tokens: 400
+      })
+      aiExplanation = completion.choices[0].message.content.trim()
+    } catch (err) {
+      console.error('Groq AI Explanation failed, using fallback:', err.message)
+      aiExplanation = `Plan optimized successfully. Priority given to subjects with closer exam dates. Daily study hours capped at ${dailyStudyHours} hours to prevent burnout, with revision buffers added before exams.`
+    }
+
     // delete old plan if exists
     await StudyPlan.deleteOne({ user: req.user.id })
 
@@ -127,7 +169,8 @@ export const generatePlan = async (req, res) => {
       user: req.user.id,
       startDate: new Date(startDate),
       dailyStudyHours,
-      schedule
+      schedule,
+      aiExplanation
     })
 
     res.status(201).json({
@@ -303,84 +346,55 @@ export const rebalancePlan = async (req, res) => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    const missedTasks = []
+    const { rescheduledCount, missedTasks } = rebalanceStudyPlan(studyPlan, today)
 
-    // 1. Collect uncompleted tasks from past days
-    studyPlan.schedule.forEach(day => {
-      const dayDate = new Date(day.date)
-      dayDate.setHours(0, 0, 0, 0)
-
-      if (dayDate < today) {
-        const uncompleted = day.tasks.filter(t => !t.isCompleted)
-        missedTasks.push(...uncompleted)
-        // Keep only completed tasks in past days
-        day.tasks = day.tasks.filter(t => t.isCompleted)
-        day.totalHours = day.tasks.reduce((sum, t) => sum + (t.estimatedHours || 1), 0)
-      }
-    })
-
-    if (missedTasks.length === 0) {
+    if (rescheduledCount === 0) {
       return res.status(200).json({
         message: 'No missed tasks found! Your schedule is on track 🎉',
         rescheduledCount: 0,
-        studyPlan
+        studyPlan,
+        explanation: 'Your schedule is currently fully on track! No missed tasks to redistribute.'
       })
-    }
-
-    // 2. Redistribute missed tasks into today and future days
-    let missedIdx = 0
-    studyPlan.schedule.forEach(day => {
-      const dayDate = new Date(day.date)
-      dayDate.setHours(0, 0, 0, 0)
-
-      if (dayDate >= today && !day.isBreakDay && missedIdx < missedTasks.length) {
-        const currentHours = day.tasks.reduce((sum, t) => sum + (t.estimatedHours || 1), 0)
-        let availableHours = Math.max(0, studyPlan.dailyStudyHours - currentHours)
-
-        while (missedIdx < missedTasks.length && availableHours > 0) {
-          const taskToMove = missedTasks[missedIdx]
-          day.tasks.push(taskToMove)
-          availableHours -= (taskToMove.estimatedHours || 1)
-          missedIdx++
-        }
-
-        day.totalHours = day.tasks.reduce((sum, t) => sum + (t.estimatedHours || 1), 0)
-      }
-    })
-
-    // 3. If any missed tasks remain, append a new day at the end
-    if (missedIdx < missedTasks.length) {
-      const lastDay = studyPlan.schedule[studyPlan.schedule.length - 1]
-      const lastDate = new Date(lastDay.date)
-
-      while (missedIdx < missedTasks.length) {
-        lastDate.setDate(lastDate.getDate() + 1)
-        const newDayTasks = []
-        let hoursUsed = 0
-
-        while (missedIdx < missedTasks.length && hoursUsed < studyPlan.dailyStudyHours) {
-          const taskToMove = missedTasks[missedIdx]
-          newDayTasks.push(taskToMove)
-          hoursUsed += (taskToMove.estimatedHours || 1)
-          missedIdx++
-        }
-
-        studyPlan.schedule.push({
-          date: new Date(lastDate),
-          dayName: lastDate.toLocaleDateString('en-US', { weekday: 'long' }),
-          tasks: newDayTasks,
-          totalHours: hoursUsed,
-          isBreakDay: false
-        })
-      }
     }
 
     await studyPlan.save()
 
+    // Generate AI explanation for rebalance
+    let explanation = ''
+    try {
+      const missedDetails = missedTasks.map(t => `- ${t.subjectName}: ${t.chapterName}`).join('\n')
+
+      const completion = await groq.chat.completions.create({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert AI Study Assistant.
+            The student has missed study sessions and the system has dynamically redistributed their unfinished tasks.
+            Explain the updates to their study plan clearly, directly, and encouragingly.
+            
+            Missed tasks that were rescheduled:
+            ${missedDetails}
+            
+            Daily study hour limit: ${studyPlan.dailyStudyHours} hours.
+            
+            Formulate a friendly response explaining what changes were made (e.g., "I shifted your unfinished Physics session into tomorrow's schedule without increasing your study workload past the ${studyPlan.dailyStudyHours}-hour daily limit.").
+            Ensure the response is extremely human, brief, direct, and encouraging. Do NOT include markdown code blocks or wrapping tags.`
+          }
+        ],
+        max_tokens: 250
+      })
+      explanation = completion.choices[0].message.content.trim()
+    } catch (err) {
+      console.error('Groq Rebalance Explanation failed, using fallback:', err.message)
+      explanation = `Your plan has been updated! I redistributed ${rescheduledCount} unfinished task(s) across the upcoming days without increasing your study workload past the ${studyPlan.dailyStudyHours} hours/day limit.`
+    }
+
     res.status(200).json({
-      message: `AI rebalanced schedule! ${missedTasks.length} missed task(s) rescheduled ✅`,
-      rescheduledCount: missedTasks.length,
-      studyPlan
+      message: `AI rebalanced schedule! ${rescheduledCount} missed task(s) rescheduled ✅`,
+      rescheduledCount,
+      studyPlan,
+      explanation
     })
 
   } catch (error) {

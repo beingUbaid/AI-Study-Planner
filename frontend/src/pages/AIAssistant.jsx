@@ -5,7 +5,6 @@ import {
   GraduationCap, Cpu, ChevronRight, Loader2, Layers
 } from 'lucide-react';
 import { aiAPI } from '../services/api';
-import VoiceInputButton from '../components/VoiceInputButton';
 import FlashcardsQuizModal from '../components/FlashcardsQuizModal';
 
 const STORAGE_KEY = 'ai_chat_messages';
@@ -173,6 +172,14 @@ const AIAssistant = () => {
         };
 
         setMessages(prev => [...prev, aiMsg]);
+
+        if (data.rebalanced && setNotifications) {
+          setNotifications(prev => [{
+            id: Date.now(),
+            text: `🤖 AI rebalanced schedule! ${data.rescheduledCount} missed task(s) rescheduled.`,
+            read: false
+          }, ...prev]);
+        }
 
         // save to history sidebar
         const historyTitle = query.length > 40 ? query.substring(0, 40) + '...' : query;
@@ -360,7 +367,6 @@ const AIAssistant = () => {
           style={{ minHeight: 0 }}
         >
           {messages.map((msg, index) => {
-            const hasLectures = msg.lectures && msg.lectures.length > 0;
             return (
               <div key={index} className="space-y-4">
                 <div className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -375,42 +381,6 @@ const AIAssistant = () => {
                   </div>
                 </div>
 
-                {hasLectures && (
-                  <div className="pl-0 sm:pl-4 space-y-3 animate-in fade-in duration-300">
-                    <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center gap-1.5">
-                      <Video className="w-3.5 h-3.5 text-purple-400" />
-                      Recommended Lectures ({msg.level})
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {msg.lectures.map(video => (
-                        <div
-                          key={video.id}
-                          onClick={() => { setActiveVideoId(video.id); setActiveVideoTitle(video.title); }}
-                          className="glass-panel border border-slate-800 rounded-xl overflow-hidden hover:border-slate-700 transition-all cursor-pointer flex gap-3 p-2 group bg-slate-900/40"
-                        >
-                          <div className="relative w-20 aspect-video rounded-lg overflow-hidden flex-shrink-0 bg-slate-800">
-                            <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/20 transition-colors">
-                              <Play className="w-5 h-5 text-white fill-current" />
-                            </div>
-                            <span className="absolute bottom-1 right-1 bg-black/75 px-1 py-0.5 rounded text-[8px] font-bold font-mono text-slate-300">
-                              {video.duration}
-                            </span>
-                          </div>
-                          <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0 text-[10px]">
-                            <div>
-                              <h4 className="font-bold text-slate-200 truncate group-hover:text-primary-400 transition-colors">{video.title}</h4>
-                              <p className="text-slate-500 font-semibold mt-0.5">{video.author}</p>
-                            </div>
-                            <span className="text-primary-400 font-bold flex items-center gap-0.5">
-                              Watch <ChevronRight className="w-3 h-3" />
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })}
@@ -454,23 +424,7 @@ const AIAssistant = () => {
         )}
 
         {/* Input Area */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/20 space-y-3 flex-shrink-0">
-          <div className="flex gap-2 overflow-x-auto whitespace-nowrap scrollbar-none text-[10px] pb-1">
-            {[
-              { label: "💡 Explain Simply", text: `Explain ${selectedSubject} like I am 5 years old.` },
-              { label: "📚 Revision Guide", text: `Create a revision checklist for ${selectedSubject}.` },
-              { label: "🔬 Advanced Theory", text: `What are the advanced theoretical models for ${selectedSubject}?` },
-              { label: "🎥 Video Lectures", text: `Recommend video lectures for ${selectedSubject}.` }
-            ].map((p, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleSend(null, p.text)}
-                className="px-2.5 py-1.5 rounded-lg border border-slate-800 hover:border-slate-700 bg-slate-900/50 hover:bg-slate-800 text-slate-300 font-bold transition-all cursor-pointer"
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
+        <div className="p-4 border-t border-slate-800 bg-slate-950/20 flex-shrink-0">
 
           <form onSubmit={handleSend} className="flex gap-2.5">
             <input
@@ -480,12 +434,7 @@ const AIAssistant = () => {
               placeholder={`Ask about ${selectedSubject} (${academicLevel} level)...`}
               className="flex-1 bg-dark-900 border border-slate-700 px-4 py-3 rounded-xl text-xs font-semibold focus:border-primary-500 outline-none text-slate-100"
             />
-            <VoiceInputButton
-              onTranscript={(text) => {
-                setInputVal(text);
-                handleSend(null, text);
-              }}
-            />
+
             <button
               type="submit"
               disabled={isStreaming || !inputVal.trim()}

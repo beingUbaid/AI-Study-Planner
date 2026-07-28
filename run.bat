@@ -32,4 +32,7 @@ echo  - Backend running on: http://localhost:5000
 echo  - Frontend running on: http://localhost:5173
 echo ===================================================
 echo.
+echo Opening AI Study Planner in your browser...
+start http://localhost:5173
+echo.
 pause

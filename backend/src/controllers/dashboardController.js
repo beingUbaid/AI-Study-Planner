@@ -45,16 +45,31 @@ export const getDashboard = async (req, res) => {
       if (todayPlan && !todayPlan.isBreakDay) {
         const completed = todayPlan.tasks.filter(t => t.isCompleted)
         const pending = todayPlan.tasks.filter(t => !t.isCompleted)
+        const dayIdx = studyPlan.schedule.findIndex(d => d._id.toString() === todayPlan._id.toString())
+
+        const tasksWithIndices = todayPlan.tasks.map((t, taskIdx) => ({
+          _id: t._id,
+          subject: t.subject,
+          subjectName: t.subjectName,
+          subjectColor: t.subjectColor,
+          chapter: t.chapter,
+          chapterName: t.chapterName,
+          estimatedHours: t.estimatedHours,
+          isCompleted: t.isCompleted,
+          isRevision: t.isRevision,
+          dayIndex: dayIdx,
+          taskIndex: taskIdx
+        }))
 
         todayTasks = {
           total: todayPlan.tasks.length,
           completed: completed.length,
           pending: pending.length,
-          tasks: todayPlan.tasks
+          tasks: tasksWithIndices
         }
 
         studyHours.todayCompleted = completed.reduce(
-          (sum, t) => sum + t.estimatedHours, 0
+          (sum, t) => sum + (t.estimatedHours || 1), 0
         )
       }
 

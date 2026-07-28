@@ -1,6 +1,11 @@
 import Analytics from '../models/Analytics.js'
 import Subject from '../models/Subject.js'
 import StudyPlan from '../models/StudyPlan.js'
+import Groq from 'groq-sdk'
+
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY
+})
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -229,5 +234,78 @@ export const getSummary = async (req, res) => {
 
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message })
+  }
+}
+
+// ─────────────────────────────────────────
+// 4. GET AI ANALYTICS PERFORMANCE INSIGHTS
+// ─────────────────────────────────────────
+export const getAnalyticsInsights = async (req, res) => {
+  try {
+    const subjects = await Subject.find({ user: req.user.id })
+    const studyPlan = await StudyPlan.findOne({ user: req.user.id })
+
+    let subjectsContext = 'No subjects added yet.'
+
+    if (subjects.length > 0 && studyPlan) {
+      subjectsContext = subjects.map(s => {
+        const daysLeft = Math.ceil((new Date(s.examDate) - new Date()) / (1000 * 60 * 60 * 24))
+        const subTasks = studyPlan.schedule.flatMap(d => d.tasks).filter(t => t.subject?.toString() === s._id.toString())
+        const completed = subTasks.filter(t => t.isCompleted).length
+        const total = subTasks.length
+        const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+        return `${s.name}: Exam in ${daysLeft} days. Progress: ${completed}/${total} tasks completed (${pct}%, difficulty: ${s.difficulty})`
+      }).join('\n')
+    }
+
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an advanced study performance analyst AI.
+          Analyze the student's study plan progress and exams, and generate exactly 3 highly actionable, encouraging, and specific insights or study recommendations.
+          
+          Student progress context:
+          ${subjectsContext}
+          
+          Return ONLY a JSON array containing exactly 3 strings (bullet points).
+          Example output format:
+          [
+            "Your Math exam is in 5 days! Prioritize completing the remaining 3 chapters in your schedule.",
+            "You are doing great in Physics (80% complete)! Spend an extra 30 minutes tutoring yourself on weak concepts to lock in a top grade.",
+            "Consider shifting your heavier Mathematics study blocks to mornings, which align with your peak focus hours."
+          ]
+          Rules:
+          - Each insight must be concise (maximum 2 sentences).
+          - Be specific to the subjects and exam timelines provided.
+          - Return ONLY the raw JSON array. No explanations, no markdown blocks, no prefix/suffix.`
+        }
+      ],
+      max_tokens: 600
+    })
+
+    const responseText = completion.choices[0].message.content.trim()
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/)
+    const insights = jsonMatch ? JSON.parse(jsonMatch[0]) : [
+      "Keep studying consistently to build your study streak! 💪",
+      "Prioritize subjects with closer exam dates to maximize revision buffers. 📅",
+      "Check off completed tasks daily to trigger schedule adjustments. 🤖"
+    ]
+
+    res.status(200).json({
+      message: 'Insights generated ✅',
+      insights
+    })
+
+  } catch (error) {
+    res.status(200).json({
+      message: 'Using fallback insights due to load',
+      insights: [
+        "Keep studying consistently to build your study streak! 💪",
+        "Prioritize subjects with closer exam dates to maximize revision buffers. 📅",
+        "Check off completed tasks daily to trigger schedule adjustments. 🤖"
+      ]
+    })
   }
 }

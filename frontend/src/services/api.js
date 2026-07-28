@@ -86,6 +86,7 @@ export const aiAPI = {
   generateSchedule: (body) => request('/ai/generate-schedule', 'POST', body),
   generateFlashcards: (body) => request('/ai/generate-flashcards', 'POST', body),
   generateQuiz: (body) => request('/ai/generate-quiz', 'POST', body),
+  generateExamMode: (body) => request('/ai/generate-exam-mode', 'POST', body),
   uploadPDF: async (formData) => {
     const token = getToken()
     const response = await fetch(`${BASE_URL}/ai/upload-pdf`, {
@@ -102,5 +103,6 @@ export const aiAPI = {
 export const analyticsAPI = {
   log: () => request('/analytics/log', 'POST'),
   weekly: () => request('/analytics/weekly'),
-  summary: () => request('/analytics/summary')
+  summary: () => request('/analytics/summary'),
+  insights: () => request('/analytics/insights')
 }

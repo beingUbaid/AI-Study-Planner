@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
   Clock,
@@ -10,8 +10,11 @@ import {
   Trash2,
   Check,
   BookMarked,
-  Sparkles
+  Sparkles,
+  TrendingUp,
+  BrainCircuit
 } from 'lucide-react';
+import { plannerAPI, analyticsAPI } from '../services/api';
 
 const StudyTracker = () => {
   const {
@@ -30,6 +33,27 @@ const StudyTracker = () => {
   const [newTaskCategory, setNewTaskCategory] = useState(subjects && subjects.length > 0 ? subjects[0].name : "General");
   const [newTaskUrgency, setNewTaskUrgency] = useState("Medium");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("All");
+
+  // AI Analytics states
+  const [aiInsights, setAiInsights] = useState([]);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchInsights = async () => {
+      setInsightsLoading(true);
+      try {
+        const { data, ok } = await analyticsAPI.insights();
+        if (ok && data?.insights) {
+          setAiInsights(data.insights);
+        }
+      } catch (err) {
+        console.warn('Could not load AI insights:', err);
+      } finally {
+        setInsightsLoading(false);
+      }
+    };
+    fetchInsights();
+  }, []);
 
   const targetHours = 6.0;
 
@@ -103,7 +127,19 @@ const StudyTracker = () => {
   };
 
   // Toggle Checkbox
-  const handleToggleTask = (id) => {
+  const handleToggleTask = async (id) => {
+    const targetTask = tasks.find(t => t.id === id)
+    if (targetTask && targetTask.dayIndex !== undefined && targetTask.taskIndex !== undefined) {
+      try {
+        await plannerAPI.markComplete({
+          dayIndex: targetTask.dayIndex,
+          taskIndex: targetTask.taskIndex
+        })
+      } catch (err) {
+        console.warn('Failed to sync checklist completion with server:', err)
+      }
+    }
+
     setTasks(prev => prev.map(task =>
       task.id === id ? { ...task, completed: !task.completed } : task
     ));
@@ -435,6 +471,74 @@ const StudyTracker = () => {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* AI Insights & Performance Metrics */}
+          <div className="glass-panel rounded-2xl p-6 border border-white/5 bg-gradient-to-br from-dark-900 via-[#13072e]/5 to-dark-900 space-y-6">
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <BrainCircuit className="w-5 h-5 text-purple-400" />
+                AI Analytics & Mastery Logs
+              </h3>
+              <p className="text-slate-400 text-xs mt-0.5">Real-time study recommendations and retention analytics.</p>
+            </div>
+
+            {/* Metrics subgrid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Average Quiz Performance card */}
+              <div className="bg-slate-900/40 border border-slate-800/80 p-4 rounded-xl flex items-center gap-4">
+                <div className="p-3 bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded-xl">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Average Quiz Score</span>
+                  <span className="text-lg font-black text-white block mt-0.5">84.5%</span>
+                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-2">
+                    <div className="bg-teal-500 h-full rounded-full" style={{ width: '84.5%' }}></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Flashcard Mastery card */}
+              <div className="bg-slate-900/40 border border-slate-800/80 p-4 rounded-xl flex items-center gap-4">
+                <div className="p-3 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-xl">
+                  <BookMarked className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Flashcard Mastery</span>
+                  <span className="text-lg font-black text-white block mt-0.5">42 / 60 Cards</span>
+                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-2">
+                    <div className="bg-purple-500 h-full rounded-full" style={{ width: '70%' }}></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* AI Insights items */}
+            <div className="space-y-3 pt-2 border-t border-slate-850">
+              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+                AI Generated Recommendations
+              </h4>
+
+              {insightsLoading ? (
+                <div className="text-center py-6 text-slate-500 text-xs flex items-center justify-center gap-2">
+                  <div className="w-3.5 h-3.5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                  Analyzing performance data...
+                </div>
+              ) : aiInsights.length > 0 ? (
+                <div className="space-y-2.5">
+                  {aiInsights.map((insight, idx) => (
+                    <div key={idx} className="p-3.5 bg-slate-900/30 border border-slate-850/80 rounded-xl hover:border-slate-800 transition-all flex gap-3 items-start">
+                      <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1.5 flex-shrink-0"></div>
+                      <p className="text-xs text-slate-300 font-medium leading-relaxed">{insight}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-500 italic">No recommendations available yet. Keep checking off tasks to load dynamic insights.</p>
+              )}
             </div>
           </div>
         </div>

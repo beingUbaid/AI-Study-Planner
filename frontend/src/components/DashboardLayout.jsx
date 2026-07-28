@@ -14,11 +14,11 @@ import {
   MessageSquare,
   X,
   Play,
-  Loader2
+  Loader2,
+  Menu
 } from 'lucide-react';
-import { subjectsAPI, dashboardAPI, analyticsAPI } from '../services/api';
+import { subjectsAPI, dashboardAPI, analyticsAPI, aiAPI, plannerAPI } from '../services/api';
 import Logo from './Logo';
-import VoiceInputButton from './VoiceInputButton';
 
 const DashboardLayout = () => {
   const navigate = useNavigate();
@@ -75,7 +75,8 @@ const DashboardLayout = () => {
   });
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // --- CHATBOT STATE ---
+  // --- CHATBOT & MENU STATE ---
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState(() => {
@@ -257,7 +258,7 @@ const DashboardLayout = () => {
   };
 
   // --- AI STUDY CHATBOT RESPONDER ---
-  const handleSendMessage = (e, textOverride = null) => {
+  const handleSendMessage = async (e, textOverride = null) => {
     if (e) e.preventDefault();
     const query = (textOverride || chatInput).trim();
     if (!query) return;
@@ -268,53 +269,85 @@ const DashboardLayout = () => {
     setChatInput("");
     setIsTyping(true);
 
-    // Mock streaming AI response based on matching keywords
-    setTimeout(() => {
-      let reply = "";
-      let lectures = [];
-      const qLower = query.toLowerCase();
+    try {
+      const history = chatMessages.slice(-5).map(m => ({
+        role: m.sender === 'user' ? 'user' : 'assistant',
+        content: m.text
+      }));
 
-      if (qLower.includes("what should i study") || qLower.includes("today") || qLower.includes("tasks")) {
-        const pending = tasks.filter(t => !t.completed);
-        if (pending.length > 0) {
-          reply = `Today, you should focus on your pending tasks:\n\n` + 
-            pending.map((t, i) => `${i + 1}. **${t.text}** (${t.category})`).join('\n\n') + 
-            `\n\nLet's check off at least one target!`;
-        } else {
-          reply = "All your study tasks for today are fully completed! Excellent streak management. You can schedule new tasks in the Calendar page.";
-        }
-      } else if (qLower.includes("exam") || qLower.includes("schedule") || qLower.includes("days left") || qLower.includes("upcoming")) {
-        if (exams.length > 0) {
-          reply = `Here are your upcoming exam schedules:\n\n` + 
-            exams.map(ex => {
-              const daysLeft = Math.ceil((new Date(ex.date) - new Date("2026-06-23")) / (1000 * 3600 * 24));
-              return `- **${ex.name}** (${ex.subject}) in **${daysLeft > 0 ? daysLeft : 0} days** (AI Readiness: ${ex.readiness}%)`;
-            }).join('\n\n');
-        } else {
-          reply = "You don't have any exams scheduled yet! Head over to the Exams page to track your first test date.";
-        }
-      } else if (qLower.includes("revision") || qLower.includes("plan")) {
-        reply = "Here is a high-yield revision roadmap:\n\n1. **First Pass (Days 1-3)**: Active recall flashcards & concept maps for hard chapters.\n2. **Practice Pass (Days 4-6)**: Solve timed mock papers and past questions.\n3. **Final Pass (Exam Eve)**: Focus on low-readiness formulas and sleep 8 hours.";
-      } else if (qLower.includes("calculus") || qLower.includes("integration") || qLower.includes("math")) {
-        reply = "For Calculus / Integration by Parts, write down the LIATE priority scheme: Logarithmic, Inverse trig, Algebraic, Trigonometric, Exponential. Let 'u' be the one that appears first in LIATE, and 'dv' be the rest. Run the equation: \n\n$$\\int u\\,dv = uv - \\int v\\,du$$";
-        lectures = chatbotLectures.math;
-      } else if (qLower.includes("physics") || qLower.includes("mechanics") || qLower.includes("force") || qLower.includes("gravity")) {
-        reply = "To solve classical mechanics problems:\n\n1. Draw a clean Free Body Diagram (FBD),\n2. Decompose forces into components,\n3. Set up equations using Newton's second law: $\\Sigma F = m \\cdot a$.";
-        lectures = chatbotLectures.physics;
-      } else if (qLower.includes("computer") || qLower.includes("code") || qLower.includes("recursion") || qLower.includes("java") || qLower.includes("javascript")) {
-        reply = "Recursion requires a Base Case to terminate the stack (preventing StackOverflow) and a Recursive Case that reduces problem size.";
-        lectures = chatbotLectures.coding;
-      } else if (qLower.includes("chemistry") || qLower.includes("reaction") || qLower.includes("redox") || qLower.includes("acid")) {
-        reply = "To balance redox reactions in acids: split oxidation and reduction half-reactions, balance atoms except H/O, balance O with H2O, H with H+, and equalise charges using electrons.";
-        lectures = chatbotLectures.chemistry;
-      } else {
-        reply = "Here is my advice: break this topic into simple Feynman points. Explain it as if teaching a child, use visual diagrams, and keep active recall review cycles scheduled.";
-        lectures = chatbotLectures.math; // default recommendations
-      }
+      const { data, ok } = await aiAPI.chat({
+        message: query,
+        history
+      });
 
       setIsTyping(false);
-      setChatMessages(prev => [...prev, { sender: 'ai', text: reply, lectures }]);
-    }, 1250);
+
+      if (ok && data?.response) {
+        let lectures = [];
+        const qLower = query.toLowerCase();
+        if (qLower.includes("math") || qLower.includes("calculus")) {
+          lectures = chatbotLectures.math;
+        } else if (qLower.includes("physics")) {
+          lectures = chatbotLectures.physics;
+        } else if (qLower.includes("computer") || qLower.includes("code")) {
+          lectures = chatbotLectures.coding;
+        } else if (qLower.includes("chemistry")) {
+          lectures = chatbotLectures.chemistry;
+        } else {
+          lectures = chatbotLectures.math; // default recommendations
+        }
+
+        setChatMessages(prev => [...prev, { 
+          sender: 'ai', 
+          text: data.response, 
+          lectures 
+        }]);
+
+        if (data.rebalanced) {
+          setNotifications(prev => [{
+            id: Date.now(),
+            text: `🤖 AI rebalanced schedule! ${data.rescheduledCount} missed task(s) rescheduled.`,
+            read: false
+          }, ...prev]);
+
+          // Fetch updated dashboard and schedule data
+          const [dashboardRes, scheduleRes] = await Promise.all([
+            dashboardAPI.get(),
+            plannerAPI.getSchedule()
+          ]);
+
+          if (dashboardRes.ok && dashboardRes.data) {
+            setStreak(dashboardRes.data.streak?.current || 0);
+            setTodayHours(dashboardRes.data.studyHours?.todayCompleted || 0);
+            if (dashboardRes.data.todayTasks?.tasks) {
+              setTasks(dashboardRes.data.todayTasks.tasks.map((task, idx) => ({
+                id: `backend-task-${idx}`,
+                text: `${task.subjectName ? `${task.subjectName}: ` : ''}${task.chapterName || task.name || 'Study task'}`,
+                completed: task.isCompleted || false,
+                category: task.subjectName || 'General',
+                urgency: 'Medium',
+                dayIndex: task.dayIndex,
+                taskIndex: task.taskIndex
+              })));
+            }
+          }
+        }
+      } else {
+        setChatMessages(prev => [...prev, { 
+          sender: 'ai', 
+          text: "I couldn't process your question right now. Please try again. 🧠", 
+          lectures: [] 
+        }]);
+      }
+    } catch (err) {
+      console.warn('AI chat failed:', err);
+      setIsTyping(false);
+      setChatMessages(prev => [...prev, { 
+        sender: 'ai', 
+        text: "Connection error. Please verify your server connection and try again. 📡", 
+        lectures: [] 
+      }]);
+    }
   };
 
   const activePath = location.pathname;
@@ -445,6 +478,12 @@ const DashboardLayout = () => {
         {/* Top Header */}
         <header className="px-6 py-4 bg-dark-900/40 backdrop-blur-md border-b border-slate-800/60 flex justify-between items-center z-20">
           <div className="flex items-center gap-3 md:hidden">
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="p-2 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-slate-800 text-slate-300 cursor-pointer"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
             {/* Mobile Logo */}
             <Logo size="sm" />
           </div>
@@ -457,15 +496,6 @@ const DashboardLayout = () => {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Mobile Nav Links */}
-            <nav className="flex md:hidden gap-1.5 bg-slate-800/40 border border-slate-700/50 p-1.5 rounded-xl text-xs overflow-x-auto max-w-[240px]">
-              <Link to="/dashboard" className={`px-2.5 py-1 rounded-lg ${activePath === '/dashboard' ? 'bg-primary-500 text-white font-extrabold shadow-sm' : 'text-slate-350 font-semibold'}`}>Dashboard</Link>
-              <Link to="/planner" className={`px-2.5 py-1 rounded-lg ${activePath === '/planner' ? 'bg-primary-500 text-white font-extrabold shadow-sm' : 'text-slate-350 font-semibold'}`}>Calendar</Link>
-              <Link to="/ai-assistant" className={`px-2.5 py-1 rounded-lg ${activePath === '/ai-assistant' ? 'bg-primary-500 text-white font-extrabold shadow-sm' : 'text-slate-350 font-semibold'}`}>AI Chat</Link>
-              <Link to="/subjects" className={`px-2.5 py-1 rounded-lg ${activePath === '/subjects' ? 'bg-primary-500 text-white font-extrabold shadow-sm' : 'text-slate-350 font-semibold'}`}>Subjects</Link>
-              <Link to="/exams" className={`px-2.5 py-1 rounded-lg ${activePath === '/exams' ? 'bg-primary-500 text-white font-extrabold shadow-sm' : 'text-slate-350 font-semibold'}`}>Exams</Link>
-              <Link to="/study" className={`px-2.5 py-1 rounded-lg ${activePath === '/study' ? 'bg-primary-500 text-white font-extrabold shadow-sm' : 'text-slate-350 font-semibold'}`}>Study</Link>
-            </nav>
 
             {/* Notifications */}
             <div className="relative">
@@ -581,34 +611,6 @@ const DashboardLayout = () => {
                   >
                     <div>{msg.text}</div>
                     
-                    {msg.sender === 'ai' && msg.lectures && msg.lectures.length > 0 && (
-                      <div className="mt-3.5 pt-3 border-t border-slate-850 space-y-2">
-                        <p className="text-[10px] text-primary-400 font-bold uppercase tracking-wider">Recommended Lectures:</p>
-                        <div className="space-y-2">
-                          {msg.lectures.map(vid => (
-                            <button
-                              key={vid.id}
-                              onClick={() => {
-                                setPlayVideoId(vid.id);
-                                setPlayVideoTitle(vid.title);
-                              }}
-                              className="w-full flex items-center gap-2 p-1.5 rounded-lg bg-slate-950/50 hover:bg-slate-950/80 border border-slate-800 hover:border-slate-700 transition-all text-left cursor-pointer group"
-                            >
-                              <div className="w-10 h-7 rounded overflow-hidden relative flex-shrink-0">
-                                <img src={vid.thumbnail} alt={vid.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                  <Play className="w-2.5 h-2.5 text-white fill-white" />
-                                </div>
-                              </div>
-                              <div className="flex-1 min-w-0 text-[10px]">
-                                <h5 className="text-slate-200 font-bold truncate">{vid.title}</h5>
-                                <p className="text-[8px] text-slate-500 truncate">{vid.author} • {vid.duration}</p>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}
@@ -623,22 +625,7 @@ const DashboardLayout = () => {
               )}
             </div>
 
-            {/* Quick Prompts Drawer */}
-            <div className="px-4 py-2 border-t border-slate-850 bg-slate-950/20 flex gap-2 overflow-x-auto whitespace-nowrap scrollbar-none text-[10px]">
-              {[
-                { label: "📅 Today's Tasks", text: "What should I study today?" },
-                { label: "📝 Exam Countdown", text: "How many days left for exams?" },
-                { label: "🚀 Revision Guide", text: "Create a revision plan." }
-              ].map((p, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSendMessage(null, p.text)}
-                  className="px-2.5 py-1.5 rounded-lg border border-slate-850 hover:border-slate-700 bg-slate-900/50 hover:bg-slate-800 text-slate-300 font-bold transition-all cursor-pointer"
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+
 
             {/* Chat Input */}
             <form onSubmit={handleSendMessage} className="p-3 border-t border-slate-850 bg-slate-900/50 flex gap-2">
@@ -649,12 +636,7 @@ const DashboardLayout = () => {
                 placeholder="Ask about equations, tasks, schedules..."
                 className="flex-1 bg-dark-900 border border-slate-700 px-3.5 py-2.5 rounded-xl text-xs font-semibold focus:border-primary-500 outline-none text-slate-100"
               />
-              <VoiceInputButton
-                onTranscript={(text) => {
-                  setChatInput(text);
-                  handleSendMessage(null, text);
-                }}
-              />
+
               <button
                 type="submit"
                 disabled={!chatInput.trim()}
@@ -702,6 +684,139 @@ const DashboardLayout = () => {
               ></iframe>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* --- MOBILE DRAWER NAVIGATION --- */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex animate-in fade-in duration-200">
+          {/* Backdrop overlay */}
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          
+          {/* Drawer Content */}
+          <aside className="relative w-72 max-w-[80vw] bg-[#0c1220]/95 backdrop-blur-md border-r border-slate-800/80 p-6 flex flex-col justify-between z-10 shadow-2xl animate-in slide-in-from-left duration-300">
+            <div>
+              {/* Header with Close */}
+              <div className="flex items-center justify-between mb-8">
+                <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+                  <Logo size="md" />
+                </Link>
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-1.5 hover:bg-slate-800/50 rounded-lg text-slate-400 hover:text-slate-200 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Nav Links */}
+              <nav className="space-y-2.5">
+                <Link
+                  to="/dashboard"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                    activePath === '/dashboard'
+                      ? 'bg-gradient-to-r from-primary-500/20 via-purple-500/15 to-transparent text-white font-extrabold text-base border-l-4 border-primary-400 shadow-md shadow-primary-500/10 scale-[1.02]'
+                      : 'text-slate-350 text-sm font-bold hover:bg-slate-800/40 hover:text-white border-l-4 border-transparent'
+                  }`}
+                >
+                  <BarChart3 className="w-5 h-5" />
+                  <span>Dashboard</span>
+                </Link>
+
+                <Link
+                  to="/planner"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                    activePath === '/planner'
+                      ? 'bg-gradient-to-r from-primary-500/20 via-purple-500/15 to-transparent text-white font-extrabold text-base border-l-4 border-primary-400 shadow-md shadow-primary-500/10 scale-[1.02]'
+                      : 'text-slate-350 text-sm font-bold hover:bg-slate-800/40 hover:text-white border-l-4 border-transparent'
+                  }`}
+                >
+                  <CalendarRange className="w-5 h-5" />
+                  <span>AI Calendar Planner</span>
+                </Link>
+
+                <Link
+                  to="/ai-assistant"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                    activePath === '/ai-assistant'
+                      ? 'bg-gradient-to-r from-primary-500/20 via-purple-500/15 to-transparent text-white font-extrabold text-base border-l-4 border-primary-400 shadow-md shadow-primary-500/10 scale-[1.02]'
+                      : 'text-slate-350 text-sm font-bold hover:bg-slate-800/40 hover:text-white border-l-4 border-transparent'
+                  }`}
+                >
+                  <MessageSquare className="w-5 h-5" />
+                  <span>AI Chatbot Tutor</span>
+                </Link>
+                
+                <Link
+                  to="/exams"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                    activePath === '/exams'
+                      ? 'bg-gradient-to-r from-primary-500/20 via-purple-500/15 to-transparent text-white font-extrabold text-base border-l-4 border-primary-400 shadow-md shadow-primary-500/10 scale-[1.02]'
+                      : 'text-slate-350 text-sm font-bold hover:bg-slate-800/40 hover:text-white border-l-4 border-transparent'
+                  }`}
+                >
+                  <BookOpen className="w-5 h-5" />
+                  <span>Exams</span>
+                </Link>
+
+                <Link
+                  to="/subjects"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                    activePath === '/subjects'
+                      ? 'bg-gradient-to-r from-primary-500/20 via-purple-500/15 to-transparent text-white font-extrabold text-base border-l-4 border-primary-400 shadow-md shadow-primary-500/10 scale-[1.02]'
+                      : 'text-slate-350 text-sm font-bold hover:bg-slate-800/40 hover:text-white border-l-4 border-transparent'
+                  }`}
+                >
+                  <GraduationCap className="w-5 h-5" />
+                  <span>Subjects</span>
+                </Link>
+
+                <Link
+                  to="/study"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                    activePath === '/study'
+                      ? 'bg-gradient-to-r from-primary-500/20 via-purple-500/15 to-transparent text-white font-extrabold text-base border-l-4 border-primary-400 shadow-md shadow-primary-500/10 scale-[1.02]'
+                      : 'text-slate-350 text-sm font-bold hover:bg-slate-800/40 hover:text-white border-l-4 border-transparent'
+                  }`}
+                >
+                  <Clock className="w-5 h-5" />
+                  <span>Study & Tasks</span>
+                </Link>
+              </nav>
+            </div>
+
+            {/* User Card & Logout */}
+            <div className="border-t border-slate-800/80 pt-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary-400 to-purple-500 flex items-center justify-center font-bold text-white shadow-md border border-slate-700/50">
+                  {userName?.charAt(0).toUpperCase() || 'U'}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">{userName}</p>
+                  <p className="text-[11px] text-slate-400 font-medium break-all">{userEmail}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleLogout();
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-slate-800 hover:border-red-500/30 hover:bg-red-500/5 text-slate-400 hover:text-red-400 text-sm font-semibold transition-all cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
+            </div>
+          </aside>
         </div>
       )}
 

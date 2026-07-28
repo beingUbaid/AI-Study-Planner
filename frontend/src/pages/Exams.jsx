@@ -7,8 +7,11 @@ import {
   BookOpen,
   PlusCircle,
   TrendingUp,
-  Sparkles
+  Sparkles,
+  Flame,
+  Award
 } from 'lucide-react';
+import { aiAPI } from '../services/api';
 
 const Exams = () => {
   const { exams, setExams, subjects, setNotifications } = useOutletContext();
@@ -19,6 +22,17 @@ const Exams = () => {
   const [newExamDate, setNewExamDate] = useState("");
   const [newExamReadiness, setNewExamReadiness] = useState(50);
   const [subjectFilter, setSubjectFilter] = useState("All");
+
+  // Before Exam Mode states
+  const [activeTab, setActiveTab] = useState("list"); // "list" | "examMode"
+  const [examModeDate, setExamModeDate] = useState("");
+  const [examModeSubjects, setExamModeSubjects] = useState("");
+  const [examModePrep, setExamModePrep] = useState(50);
+  const [examModeTarget, setExamModeTarget] = useState(90);
+  const [examModeHours, setExamModeHours] = useState(3);
+  const [examModeLoading, setExamModeLoading] = useState(false);
+  const [examModePlan, setExamModePlan] = useState(null);
+  const [examModeError, setExamModeError] = useState("");
 
   // Subject Colors Map
   const subjectColors = {
@@ -73,6 +87,43 @@ const Exams = () => {
       { id: Date.now(), text: `Removed exam: ${name}`, read: true },
       ...prev
     ]);
+  };
+
+  const handleGenerateExamMode = async (e) => {
+    e.preventDefault();
+    if (!examModeDate || !examModeSubjects.trim()) {
+      setExamModeError("Exam date and subjects are required.");
+      return;
+    }
+    setExamModeLoading(true);
+    setExamModeError("");
+    setExamModePlan(null);
+
+    try {
+      const { data, ok } = await aiAPI.generateExamMode({
+        examDate: examModeDate,
+        subjects: examModeSubjects,
+        currentPrep: examModePrep,
+        targetScore: examModeTarget,
+        availableHours: examModeHours
+      });
+
+      if (ok && data?.countdownPlan) {
+        setExamModePlan(data.countdownPlan);
+        setNotifications(prev => [{
+          id: Date.now(),
+          text: `🎯 Generated AI Exam Prep Roadmap for "${examModeSubjects}"!`,
+          read: false
+        }, ...prev]);
+      } else {
+        setExamModeError(data.message || "Failed to generate exam roadmap. Please try again.");
+      }
+    } catch (err) {
+      console.warn("Exam Mode failed:", err);
+      setExamModeError("Connection error. Could not connect to AI server.");
+    } finally {
+      setExamModeLoading(false);
+    }
   };
 
   // Filter exams
@@ -142,124 +193,310 @@ const Exams = () => {
             <h4 className="text-2xl font-black text-white mt-1">
               {exams.filter(e => getDaysRemaining(e.date) <= 3 && getDaysRemaining(e.date) >= 0).length} Exams
             </h4>
-          </div>
-        </div>
       </div>
-
       {/* Main Content Layout */}
       <div className="glass-panel rounded-2xl p-6 border border-white/5">
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-6 border-b border-slate-800/80">
-          <div className="font-bold text-lg text-white">Scheduled Exams</div>
-          
-          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1">
-            {["All", ...(subjects || []).map(s => s.name)].map(subj => (
-              <button
-                key={subj}
-                onClick={() => setSubjectFilter(subj)}
-                className={`px-3.5 py-2 rounded-xl border transition-all duration-200 cursor-pointer whitespace-nowrap ${
-                  subjectFilter === subj
-                    ? 'text-sm font-extrabold bg-gradient-to-r from-primary-500 to-teal-500 text-white shadow-lg border-teal-400 scale-105'
-                    : 'text-xs font-bold text-slate-350 bg-slate-800/80 border-slate-700 hover:text-white hover:bg-slate-750'
-                }`}
-              >
-                {subj}
-              </button>
-            ))}
-          </div>
+        {/* Navigation Tabs */}
+        <div className="flex border-b border-slate-800/80 mb-6 gap-6">
+          <button
+            onClick={() => setActiveTab("list")}
+            className={`pb-3 text-sm font-extrabold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "list"
+                ? "border-teal-400 text-teal-400"
+                : "border-transparent text-slate-400 hover:text-white"
+            }`}
+          >
+            <Calendar className="w-4 h-4" />
+            Scheduled Exams
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab("examMode");
+              // prefill subjects from subjects state
+              if (subjects?.length > 0 && !examModeSubjects) {
+                setExamModeSubjects(subjects.map(s => s.name).join(", "));
+              }
+            }}
+            className={`pb-3 text-sm font-extrabold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "examMode"
+                ? "border-purple-400 text-purple-400"
+                : "border-transparent text-slate-400 hover:text-white"
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-purple-450" />
+            🎯 AI Exam Prep Mode
+          </button>
         </div>
 
-        {/* Exams List Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredExams.map(exam => {
-            const daysLeft = getDaysRemaining(exam.date);
-            const isUrgent = daysLeft <= 3 && daysLeft >= 0;
-            const isOverdue = daysLeft < 0;
-
-            return (
-              <div
-                key={exam.id}
-                className={`p-5 rounded-2xl bg-slate-850/45 border transition-all duration-300 relative group flex flex-col justify-between h-56 ${
-                  isUrgent
-                    ? 'border-red-500/40 shadow-[0_0_20px_rgba(239,68,68,0.15)] bg-red-950/5'
-                    : 'border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                {/* Subject badge and Delete button */}
-                <div className="flex justify-between items-start">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${subjectColors[exam.subject] || subjectColors.General}`}>
-                    {exam.subject}
-                  </span>
-                  
+        {/* TAB 1: SCHEDULED EXAMS */}
+        {activeTab === "list" && (
+          <div className="space-y-6">
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-slate-850">
+              <div className="font-bold text-sm text-slate-350 uppercase tracking-wide">Filters</div>
+              
+              <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1">
+                {["All", ...(subjects || []).map(s => s.name)].map(subj => (
                   <button
-                    onClick={() => handleDeleteExam(exam.id, exam.name)}
-                    className="p-1 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
-                    title="Delete Exam"
+                    key={subj}
+                    onClick={() => setSubjectFilter(subj)}
+                    className={`px-3.5 py-2 rounded-xl border transition-all duration-200 cursor-pointer whitespace-nowrap ${
+                      subjectFilter === subj
+                        ? 'text-sm font-extrabold bg-gradient-to-r from-primary-500 to-teal-500 text-white shadow-lg border-teal-400 scale-105'
+                        : 'text-xs font-bold text-slate-350 bg-slate-800/80 border-slate-700 hover:text-white hover:bg-slate-750'
+                    }`}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    {subj}
                   </button>
-                </div>
-
-                {/* Exam Info */}
-                <div className="mt-3">
-                  <h4 className="text-base font-bold text-white leading-snug">{exam.name}</h4>
-                  
-                  <div className="flex items-center gap-2 text-slate-400 text-xs mt-2.5">
-                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                    <span>{new Date(exam.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                  </div>
-                </div>
-
-                {/* Countdown Badge & Readiness Gauge */}
-                <div className="mt-4 pt-3.5 border-t border-slate-800/80">
-                  {/* Gauge */}
-                  <div className="flex justify-between items-center text-[10px] text-slate-400 mb-1">
-                    <span className="flex items-center gap-1.5">
-                      <Sparkles className="w-3 h-3 text-primary-400" />
-                      AI Readiness
-                    </span>
-                    <span className="font-bold text-white">{exam.readiness}%</span>
-                  </div>
-                  
-                  <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden mb-3">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        exam.readiness >= 80
-                          ? 'bg-emerald-500'
-                          : exam.readiness >= 50
-                          ? 'bg-amber-500'
-                          : 'bg-red-500'
-                      }`}
-                      style={{ width: `${exam.readiness}%` }}
-                    ></div>
-                  </div>
-
-                  {/* Countdown Text */}
-                  <div className="flex justify-between items-center mt-2">
-                    <span className="text-[10px] text-slate-500 uppercase font-semibold tracking-wider">Countdown</span>
-                    <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded-lg border ${
-                      isOverdue
-                        ? 'bg-slate-900 border-slate-800 text-slate-500'
-                        : isUrgent
-                        ? 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse'
-                        : 'bg-teal-500/10 border-teal-500/20 text-teal-400'
-                    }`}>
-                      {isOverdue ? "Exam Completed" : daysLeft === 0 ? "EXAM TODAY!" : `${daysLeft} days remaining`}
-                    </span>
-                  </div>
-                </div>
+                ))}
               </div>
-            );
-          })}
-
-          {filteredExams.length === 0 && (
-            <div className="col-span-full text-center py-12 border border-dashed border-slate-800 rounded-2xl">
-              <Calendar className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-              <p className="text-slate-400 font-semibold text-sm">No upcoming exams found</p>
-              <p className="text-slate-500 text-xs mt-1">Try scheduling a new exam using the 'Add Upcoming Exam' button.</p>
             </div>
-          )}
-        </div>
+
+            {/* Exams List Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredExams.map(exam => {
+                const daysLeft = getDaysRemaining(exam.date);
+                const isUrgent = daysLeft <= 3 && daysLeft >= 0;
+                const isOverdue = daysLeft < 0;
+
+                return (
+                  <div
+                    key={exam.id}
+                    className={`p-5 rounded-2xl bg-slate-850/45 border transition-all duration-300 relative group flex flex-col justify-between h-56 ${
+                      isUrgent
+                        ? 'border-red-500/40 shadow-[0_0_20px_rgba(239,68,68,0.15)] bg-red-950/5'
+                        : 'border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    {/* Subject badge and Delete button */}
+                    <div className="flex justify-between items-start">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${subjectColors[exam.subject] || subjectColors.General}`}>
+                        {exam.subject}
+                      </span>
+                      
+                      <button
+                        onClick={() => handleDeleteExam(exam.id, exam.name)}
+                        className="p-1 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+                        title="Delete Exam"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Exam Info */}
+                    <div className="mt-3">
+                      <h4 className="text-base font-bold text-white leading-snug">{exam.name}</h4>
+                      
+                      <div className="flex items-center gap-2 text-slate-400 text-xs mt-2.5">
+                        <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                        <span>{new Date(exam.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      </div>
+                    </div>
+
+                    {/* Countdown Badge & Readiness Gauge */}
+                    <div className="mt-4 pt-3.5 border-t border-slate-800/80">
+                      {/* Gauge */}
+                      <div className="flex justify-between items-center text-[10px] text-slate-400 mb-1">
+                        <span className="flex items-center gap-1.5">
+                          <Sparkles className="w-3 h-3 text-primary-400" />
+                          AI Readiness
+                        </span>
+                        <span className="font-bold text-white">{exam.readiness}%</span>
+                      </div>
+                      
+                      <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden mb-3">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            exam.readiness >= 80
+                              ? 'bg-emerald-500'
+                              : exam.readiness >= 50
+                              ? 'bg-amber-500'
+                              : 'bg-red-500'
+                          }`}
+                          style={{ width: `${exam.readiness}%` }}
+                        ></div>
+                      </div>
+
+                      {/* Countdown Text */}
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-[10px] text-slate-500 uppercase font-semibold tracking-wider">Countdown</span>
+                        <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded-lg border ${
+                          isOverdue
+                            ? 'bg-slate-900 border-slate-800 text-slate-500'
+                            : isUrgent
+                            ? 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse'
+                            : 'bg-teal-500/10 border-teal-500/20 text-teal-400'
+                        }`}>
+                          {isOverdue ? "Exam Completed" : daysLeft === 0 ? "EXAM TODAY!" : `${daysLeft} days remaining`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {filteredExams.length === 0 && (
+                <div className="col-span-full text-center py-12 border border-dashed border-slate-800 rounded-2xl bg-dark-900/10">
+                  <Calendar className="w-10 h-10 text-slate-600 mx-auto mb-2" />
+                  <p className="text-slate-400 font-semibold text-sm">No upcoming exams found</p>
+                  <p className="text-slate-500 text-xs mt-1">Try scheduling a new exam using the 'Add Upcoming Exam' button.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: AI EXAM PREP MODE */}
+        {activeTab === "examMode" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Form Column */}
+              <div className="lg:col-span-5 bg-slate-900/35 border border-slate-800/60 p-6 rounded-2xl space-y-4 bg-gradient-to-tr from-dark-900 to-purple-950/5">
+                <div className="text-sm font-bold text-white flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  Calibrate AI Prep Timeline
+                </div>
+
+                {examModeError && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-450 text-xs rounded-xl">
+                    {examModeError}
+                  </div>
+                )}
+
+                <form onSubmit={handleGenerateExamMode} className="space-y-4 text-xs font-semibold text-slate-350">
+                  <div>
+                    <label className="block text-slate-400 mb-1.5 uppercase font-bold tracking-wider">Exam Date</label>
+                    <input
+                      type="date"
+                      required
+                      value={examModeDate}
+                      onChange={(e) => setExamModeDate(e.target.value)}
+                      className="w-full bg-dark-900 border border-slate-700 px-3 py-2.5 rounded-lg outline-none focus:border-purple-500 text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 mb-1.5 uppercase font-bold tracking-wider">Subject Course(s)</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Calculus II, Electromagnetism"
+                      value={examModeSubjects}
+                      onChange={(e) => setExamModeSubjects(e.target.value)}
+                      className="input-field py-2 px-3 text-slate-200"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="flex justify-between text-slate-450 mb-1.5 uppercase font-bold tracking-wider">
+                        <span>Current Prep</span>
+                        <span className="text-purple-400">{examModePrep}%</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={examModePrep}
+                        onChange={(e) => setExamModePrep(Number(e.target.value))}
+                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="flex justify-between text-slate-450 mb-1.5 uppercase font-bold tracking-wider">
+                        <span>Target Score</span>
+                        <span className="text-teal-400">{examModeTarget}%</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="50"
+                        max="100"
+                        value={examModeTarget}
+                        onChange={(e) => setExamModeTarget(Number(e.target.value))}
+                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 mb-1.5 uppercase font-bold tracking-wider">Available Hours/Day</label>
+                    <select
+                      value={examModeHours}
+                      onChange={(e) => setExamModeHours(Number(e.target.value))}
+                      className="w-full bg-dark-900 border border-slate-700 px-3 py-2.5 rounded-lg outline-none focus:border-purple-500 text-white"
+                    >
+                      {[2, 3, 4, 5, 6, 8].map(h => <option key={h} value={h}>{h} Hours</option>)}
+                    </select>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={examModeLoading}
+                    className="w-full btn-primary py-2.5 rounded-xl text-xs font-bold transition-all bg-gradient-to-r from-purple-600 to-indigo-600 border border-purple-500 hover:opacity-95 shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {examModeLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        Generating Countdown Roadmap...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-white" />
+                        Build Countdown Roadmap
+                      </>
+                    )}
+                  </button>
+                </form>
+              </div>
+
+              {/* Roadmap Timeline Column */}
+              <div className="lg:col-span-7 space-y-4">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Flame className="w-4.5 h-4.5 text-purple-400" />
+                  Your AI Exam Study Roadmap
+                </h4>
+
+                {examModePlan ? (
+                  <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+                    {examModePlan.map((step, idx) => (
+                      <div key={idx} className="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex gap-4 hover:border-slate-700 transition-all">
+                        <div className="flex flex-col items-center flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-purple-500/10 border border-purple-500/25 flex items-center justify-center font-bold text-purple-400 text-xs">
+                            {idx + 1}
+                          </div>
+                          {idx < examModePlan.length - 1 && (
+                            <div className="w-0.5 h-full bg-slate-850 my-1"></div>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-bold text-purple-400 bg-purple-600/10 px-2 py-0.5 rounded border border-purple-500/20 uppercase tracking-wide">
+                              {step.days}
+                            </span>
+                            <span className="font-extrabold text-white text-xs">
+                              {step.focus}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 leading-relaxed pt-1">
+                            {step.description}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-12 border border-dashed border-slate-850 rounded-2xl text-center space-y-2 bg-dark-900/5">
+                    <Award className="w-8 h-8 text-slate-650 mx-auto" />
+                    <p className="text-slate-400 text-xs font-semibold">Ready to generate your countdown roadmap</p>
+                    <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                      Fill out target date and subjects on the left to calibrate your high-intensity study blocks.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* --- ADD EXAM MODAL --- */}

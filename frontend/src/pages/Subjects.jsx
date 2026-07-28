@@ -271,7 +271,8 @@ const Subjects = () => {
           <span className="text-xs text-slate-500 font-semibold">{subjects.length} registered</span>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-800/80 bg-slate-900/10">
+        {/* Desktop Table View */}
+        <div className="hidden sm:block overflow-x-auto rounded-xl border border-slate-800/80 bg-slate-900/10">
           <table className="w-full text-left border-collapse text-sm">
             <thead>
               <tr className="border-b border-slate-800/80 bg-slate-850/40 text-slate-400 font-semibold">
@@ -322,6 +323,48 @@ const Subjects = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Cards View */}
+        <div className="block sm:hidden space-y-4">
+          {subjects.map(subject => (
+            <div
+              key={subject.id}
+              className="p-4 rounded-xl border border-slate-800 bg-slate-900/30 flex flex-col gap-3.5 relative"
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-primary-500 shadow-[0_0_8px_rgba(20,184,166,0.6)]"></span>
+                  <span className="font-bold text-white text-sm">{subject.name}</span>
+                </div>
+                <button
+                  onClick={() => handleDeleteSubject(subject.id, subject.name)}
+                  className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                  title={`Delete ${subject.name}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-800/40">
+                <div>
+                  <span className="text-[9px] text-slate-500 uppercase font-semibold tracking-wider block">Exam Date</span>
+                  <span className="text-slate-300 font-bold font-mono">{formatDate(subject.examDate)}</span>
+                </div>
+                <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded border ${difficultyStyles[subject.difficulty]}`}>
+                  {subject.difficulty}
+                </span>
+              </div>
+            </div>
+          ))}
+
+          {subjects.length === 0 && (
+            <div className="text-center py-10 border border-dashed border-slate-800 rounded-xl">
+              <GraduationCap className="w-10 h-10 mx-auto text-slate-700 mb-2" />
+              <p className="font-semibold text-xs text-slate-300">No subjects found</p>
+              <p className="text-[10px] text-slate-500 mt-1">Add subjects to populate your study planner.</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

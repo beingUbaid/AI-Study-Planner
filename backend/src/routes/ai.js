@@ -5,7 +5,8 @@ import {
   aiChat,
   uploadPDF,
   aiGenerateFlashcards,
-  aiGenerateQuiz
+  aiGenerateQuiz,
+  aiGenerateExamMode
 } from '../controllers/aiController.js'
 import authMiddleware from '../middleware/authMiddleware.js'
 
@@ -28,7 +29,11 @@ const fileFilter = (req, file, cb) => {
   }
 }
 
-const upload = multer({ storage, fileFilter })
+const upload = multer({ 
+  storage, 
+  fileFilter,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+})
 
 router.use(authMiddleware)
 
@@ -37,5 +42,6 @@ router.post('/chat', aiChat)
 router.post('/upload-pdf', upload.single('file'), uploadPDF)
 router.post('/generate-flashcards', aiGenerateFlashcards)
 router.post('/generate-quiz', aiGenerateQuiz)
+router.post('/generate-exam-mode', aiGenerateExamMode)
 
 export default router

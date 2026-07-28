@@ -2,7 +2,8 @@ import express from 'express'
 import {
   logTodaySession,
   getWeeklyAnalytics,
-  getSummary
+  getSummary,
+  getAnalyticsInsights
 } from '../controllers/analyticsController.js'
 import authMiddleware from '../middleware/authMiddleware.js'
 
@@ -13,5 +14,6 @@ router.use(authMiddleware)
 router.post('/log', logTodaySession)
 router.get('/weekly', getWeeklyAnalytics)
 router.get('/summary', getSummary)
+router.get('/insights', getAnalyticsInsights)
 
 export default router

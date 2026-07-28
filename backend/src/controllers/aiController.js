@@ -4,6 +4,7 @@ import Subject from '../models/Subject.js'
 import Chapter from '../models/Chapter.js'
 import StudyPlan from '../models/StudyPlan.js'
 import { extractTextFromPDF } from '../utils/pdfExtract.js'
+import { rebalanceStudyPlan } from '../utils/rebalanceHelper.js'
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY
@@ -130,9 +131,12 @@ export const aiChat = async (req, res) => {
         
         ${context}
         
-        Keep responses short, friendly and actionable.
-        Use emojis to make responses more engaging.
-        If asked about specific topics, give study tips.`
+        CRITICAL TOOL - AUTO-REBALANCE:
+        If the student indicates that they missed their study hours, couldn't complete a scheduled session, or need to reschedule missed/unfinished tasks (e.g., 'I couldn't complete today's Physics session', 'I missed yesterday's study', 'reschedule missed tasks'), you MUST perform a rebalance.
+        To do this, start your response with '[TRIGGER_REBALANCE]' on its own line, and then write a friendly, concise explanation of how you have redistributed their missed hours across the remaining days without exceeding their daily study hour limits.
+        
+        Keep responses short, friendly, and actionable.
+        Use emojis to make responses more engaging.`
       },
       ...history.map(h => ({
         role: h.role,
@@ -150,11 +154,33 @@ export const aiChat = async (req, res) => {
       max_tokens: 500
     })
 
-    const aiResponse = completion.choices[0].message.content
+    let aiResponse = completion.choices[0].message.content
+    let rebalanced = false
+    let rescheduledCount = 0
+
+    if (aiResponse.includes('[TRIGGER_REBALANCE]')) {
+      aiResponse = aiResponse.replace('[TRIGGER_REBALANCE]', '').trim()
+      if (studyPlan && studyPlan.schedule.length > 0) {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const result = rebalanceStudyPlan(studyPlan, today)
+        rescheduledCount = result.rescheduledCount
+        if (rescheduledCount > 0) {
+          await studyPlan.save()
+          rebalanced = true
+        }
+      }
+      if (!rebalanced) {
+        // If rebalance couldn't proceed because no tasks were actually missed or found
+        aiResponse = aiResponse + "\n\n*(Note: I checked your schedule and everything is currently on track! No pending past tasks were found to reschedule.)*"
+      }
+    }
 
     res.status(200).json({
       message: 'Response generated ✅',
       response: aiResponse,
+      rebalanced,
+      rescheduledCount,
       history: [
         ...history,
         { role: 'user', content: message },
@@ -365,6 +391,64 @@ export const aiGenerateQuiz = async (req, res) => {
       subject,
       topic,
       quiz
+    })
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message })
+  }
+}
+
+// ─────────────────────────────────────────
+// 6. BEFORE EXAM MODE ROADMAP GENERATOR
+// ─────────────────────────────────────────
+export const aiGenerateExamMode = async (req, res) => {
+  try {
+    const { examDate, subjects, currentPrep, targetScore, availableHours } = req.body
+
+    if (!examDate || !subjects) {
+      return res.status(400).json({ message: 'Exam date and subjects are required' })
+    }
+
+    const today = new Date()
+    const daysUntilExam = Math.ceil((new Date(examDate) - today) / (1000 * 60 * 60 * 24))
+
+    if (daysUntilExam <= 0) {
+      return res.status(400).json({ message: 'Exam date must be in the future!' })
+    }
+
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert exam preparation strategist.
+          Generate a high-yield countdown roadmap to help the student prepare for their upcoming exam.
+          Return ONLY a JSON array, like this:
+          [
+            { "days": "Days 1-3", "focus": "Target Weakest Chapters", "description": "Review notes for electromagnetism, highlight key formulas." },
+            { "days": "Days 4-6", "focus": "Active Recall & Flashcards", "description": "Drill core definitions. Create visual mind-maps." }
+          ]
+          Rules:
+          - Segment the days logically based on available days (${daysUntilExam} days total).
+          - Provide at least 3 and at most 6 segments.
+          - Incorporate the student's metrics: current preparation is ${currentPrep || 50}%, target score is ${targetScore || 90}%, available study hours per day is ${availableHours || 3} hours.
+          - Return ONLY valid JSON array. No explanations or extra text.`
+        },
+        {
+          role: 'user',
+          content: `Generate countdown study plan for Subjects: ${subjects}. Exam in ${daysUntilExam} days.`
+        }
+      ],
+      max_tokens: 1000
+    })
+
+    const responseText = completion.choices[0].message.content
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/)
+    const countdownPlan = jsonMatch ? JSON.parse(jsonMatch[0]) : []
+
+    res.status(200).json({
+      message: 'Exam Mode roadmap generated ✅',
+      daysUntilExam,
+      countdownPlan
     })
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message })

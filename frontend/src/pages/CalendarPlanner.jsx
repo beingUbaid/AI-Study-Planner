@@ -34,6 +34,11 @@ const CalendarPlanner = () => {
   const [formError, setFormError] = useState("")
   const [successMessage, setSuccessMessage] = useState("")
 
+  // AI & progressive loading state
+  const [aiExplanation, setAiExplanation] = useState("")
+  const [progressiveLoadText, setProgressiveLoadText] = useState("🧠 Analyzing syllabus...")
+  const [rebalanceResult, setRebalanceResult] = useState({ isOpen: false, title: "", message: "", explanation: "" })
+
   // PDF Upload State
   const [isDragging, setIsDragging] = useState(false)
   const [uploadLoading, setUploadLoading] = useState(false)
@@ -42,6 +47,16 @@ const CalendarPlanner = () => {
   // Calendar State
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0)
   const [studyPlanEvents, setStudyPlanEvents] = useState([])
+  const [activeMobileDay, setActiveMobileDay] = useState(() => new Date().toISOString().split('T')[0])
+
+  // Sync activeMobileDay when week offset changes to match Monday of new week
+  useEffect(() => {
+    const dates = getDatesForWeek()
+    const exists = dates.some(d => d.dateStr === activeMobileDay)
+    if (!exists && dates.length > 0) {
+      setActiveMobileDay(dates[0].dateStr)
+    }
+  }, [currentWeekOffset])
 
   // Set default subject when subjects load
   useEffect(() => {
@@ -64,12 +79,70 @@ const CalendarPlanner = () => {
     }
   }, [plannerSubject])
 
-  // Load saved events
+  const loadEventsFromSchedule = (schedule) => {
+    const newTasks = []
+    const newEvents = []
+
+    schedule.forEach((day, dayIdx) => {
+      day.tasks.forEach((task, idx) => {
+        const taskId = `${day.date.split('T')[0]}-${idx}`
+        const text = `${task.subjectName || 'Study'}: ${task.chapterName || 'Task'}`
+
+        newTasks.push({
+          id: taskId,
+          text,
+          completed: task.isCompleted || false,
+          category: task.subjectName || 'General',
+          urgency: task.isRevision ? 'High' : 'Medium',
+          dayIndex: dayIdx,
+          taskIndex: idx
+        })
+
+        newEvents.push({
+          id: taskId,
+          title: text,
+          subject: task.subjectName || 'General',
+          color: task.subjectColor || '#667eea',
+          date: new Date(day.date).toISOString().split('T')[0],
+          completed: task.isCompleted || false,
+          isRevision: task.isRevision || false,
+          hours: task.estimatedHours || 1,
+          dayIndex: dayIdx,
+          taskIndex: idx
+        })
+      })
+    })
+
+    setTasks(prev => {
+      const filtered = prev.filter(t => !t.id.toString().includes('-'))
+      return [...filtered, ...newTasks]
+    })
+    saveEvents(newEvents)
+  }
+
+  // Load saved events and active schedule from DB
   useEffect(() => {
-    const savedEvents = localStorage.getItem('study_calendar_events')
-    if (savedEvents) {
-      setStudyPlanEvents(JSON.parse(savedEvents))
+    const fetchActiveSchedule = async () => {
+      try {
+        const { data, ok } = await plannerAPI.getSchedule()
+        if (ok && data?.studyPlan) {
+          setAiExplanation(data.studyPlan.aiExplanation || "")
+          loadEventsFromSchedule(data.studyPlan.schedule || [])
+        } else {
+          const savedEvents = localStorage.getItem('study_calendar_events')
+          if (savedEvents) {
+            setStudyPlanEvents(JSON.parse(savedEvents))
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load schedule from DB:', err)
+        const savedEvents = localStorage.getItem('study_calendar_events')
+        if (savedEvents) {
+          setStudyPlanEvents(JSON.parse(savedEvents))
+        }
+      }
     }
+    fetchActiveSchedule()
   }, [])
 
   // Burnout detector
@@ -173,6 +246,10 @@ const CalendarPlanner = () => {
     }
 
     setIsGenerating(true)
+    setProgressiveLoadText("🧠 Analyzing syllabus...")
+    const t1 = setTimeout(() => setProgressiveLoadText("📚 Identifying chapters..."), 1200)
+    const t2 = setTimeout(() => setProgressiveLoadText("📅 Building study schedule..."), 2400)
+    const t3 = setTimeout(() => setProgressiveLoadText("✨ Optimizing your plan..."), 3600)
 
     try {
       // Step 1 — find selected subject
@@ -191,6 +268,7 @@ const CalendarPlanner = () => {
 
       if (!chapOk) {
         setFormError(chapData.message || 'Failed to save chapters')
+        clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
         return
       }
 
@@ -203,17 +281,19 @@ const CalendarPlanner = () => {
 
       if (!ok) {
         setFormError(data.message || 'Could not generate schedule. Make sure chapters are added.')
+        clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
         return
       }
 
       // Step 4 — convert schedule to calendar events
       const schedule = data.studyPlan?.schedule || []
+      setAiExplanation(data.studyPlan?.aiExplanation || '')
       const newTasks = []
       const newEvents = []
 
-      schedule.forEach((day) => {
+      schedule.forEach((day, dayIdx) => {
         day.tasks.forEach((task, idx) => {
-          const taskId = `${day.date}-${idx}`
+          const taskId = `${day.date.split('T')[0]}-${idx}`
           const text = `${task.subjectName || 'Study'}: ${task.chapterName || 'Task'}`
 
           newTasks.push({
@@ -221,7 +301,9 @@ const CalendarPlanner = () => {
             text,
             completed: task.isCompleted || false,
             category: task.subjectName || 'General',
-            urgency: task.isRevision ? 'High' : 'Medium'
+            urgency: task.isRevision ? 'High' : 'Medium',
+            dayIndex: dayIdx,
+            taskIndex: idx
           })
 
           newEvents.push({
@@ -232,7 +314,9 @@ const CalendarPlanner = () => {
             date: new Date(day.date).toISOString().split('T')[0],
             completed: task.isCompleted || false,
             isRevision: task.isRevision || false,
-            hours: task.estimatedHours || 1
+            hours: task.estimatedHours || 1,
+            dayIndex: dayIdx,
+            taskIndex: idx
           })
         })
       })
@@ -262,12 +346,27 @@ const CalendarPlanner = () => {
       console.warn('Error generating schedule:', err)
       setFormError('Something went wrong. Please try again.')
     } finally {
+      clearTimeout(t1)
+      clearTimeout(t2)
+      clearTimeout(t3)
       setIsGenerating(false)
     }
   }
 
   // Calendar helpers
-  const handleToggleEvent = (eventId) => {
+  const handleToggleEvent = async (eventId) => {
+    const targetEvent = studyPlanEvents.find(ev => ev.id === eventId)
+    if (targetEvent && targetEvent.dayIndex !== undefined && targetEvent.taskIndex !== undefined) {
+      try {
+        await plannerAPI.markComplete({
+          dayIndex: targetEvent.dayIndex,
+          taskIndex: targetEvent.taskIndex
+        })
+      } catch (err) {
+        console.warn('Failed to sync completion with server:', err)
+      }
+    }
+
     const updated = studyPlanEvents.map(ev =>
       ev.id === eventId ? { ...ev, completed: !ev.completed } : ev
     )
@@ -541,15 +640,21 @@ const CalendarPlanner = () => {
               <button
                 onClick={async () => {
                   const { data, ok } = await plannerAPI.rebalance();
-                  if (ok) {
-                    alert(data.message || "AI schedule rebalanced successfully!");
-                    // refetch schedule
-                    const schedRes = await plannerAPI.getSchedule();
-                    if (schedRes.ok && schedRes.data.studyPlan) {
-                      setSchedule(schedRes.data.studyPlan.schedule);
-                    }
+                  if (ok && data?.studyPlan) {
+                    // Update events using the helper we'll define
+                    loadEventsFromSchedule(data.studyPlan.schedule);
+                    setAiExplanation(data.studyPlan.aiExplanation || "");
+                    setRebalanceResult({
+                      isOpen: true,
+                      title: "Plan Updated Successfully",
+                      explanation: data.explanation || "Your unfinished study tasks have been redistributed across future days."
+                    });
                   } else {
-                    alert(data?.message || "No missed tasks to rebalance.");
+                    setRebalanceResult({
+                      isOpen: true,
+                      title: "Schedule On Track",
+                      explanation: data?.message || "No missed study sessions detected! Your schedule is fully on track."
+                    });
                   }
                 }}
                 className="px-3 py-1.5 rounded-xl bg-purple-600/20 border border-purple-500/40 hover:bg-purple-600/30 text-purple-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
@@ -602,7 +707,8 @@ const CalendarPlanner = () => {
             </div>
           </div>
 
-          <div className="glass-panel rounded-2xl border border-white/5 overflow-hidden">
+          {/* Desktop Weekly Calendar Grid */}
+          <div className="hidden sm:block glass-panel rounded-2xl border border-white/5 overflow-hidden">
             <div className="grid grid-cols-7 border-b border-slate-850 bg-slate-900/50">
               {weekDays.map(day => (
                 <div key={day.dateStr} className="p-3 text-center border-r border-slate-850/60 last:border-r-0">
@@ -680,6 +786,89 @@ const CalendarPlanner = () => {
             </div>
           </div>
 
+          {/* Mobile Calendar Day Selector View */}
+          <div className="block sm:hidden glass-panel rounded-2xl border border-white/5 overflow-hidden">
+            {/* Days Horizontal Tabs */}
+            <div className="grid grid-cols-7 border-b border-slate-850 bg-slate-900/50 p-1">
+              {weekDays.map(day => {
+                const isSelected = day.dateStr === activeMobileDay
+                const dayEvents = studyPlanEvents.filter(ev => ev.date === day.dateStr)
+                
+                return (
+                  <button
+                    key={day.dateStr}
+                    type="button"
+                    onClick={() => setActiveMobileDay(day.dateStr)}
+                    className={`py-2 text-center rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-gradient-to-tr from-primary-500 to-primary-600 text-white shadow-md'
+                        : 'hover:bg-slate-800/40 text-slate-400'
+                    }`}
+                  >
+                    <span className={`text-[8px] uppercase font-bold ${isSelected ? 'text-slate-100' : 'text-slate-500'}`}>{day.dayName}</span>
+                    <span className="text-xs font-black mt-0.5">{day.dayNum}</span>
+                    {dayEvents.length > 0 && (
+                      <span className={`w-1 h-1 rounded-full mt-1 ${isSelected ? 'bg-white' : 'bg-primary-400'}`}></span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* List of events for selected day */}
+            <div className="p-4 space-y-3 min-h-[200px]">
+              <div className="flex justify-between items-center text-xs font-bold text-slate-400 pb-2 border-b border-slate-850">
+                <span>Selected: {new Date(activeMobileDay).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
+                {activeMobileDay === new Date().toISOString().split('T')[0] && (
+                  <span className="text-[10px] font-bold text-primary-400 uppercase tracking-wider">Today</span>
+                )}
+              </div>
+
+              {studyPlanEvents.filter(ev => ev.date === activeMobileDay).map(event => (
+                <div
+                  key={event.id}
+                  className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${getEventColor(event)}`}
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <button
+                      onClick={() => handleToggleEvent(event.id)}
+                      className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors ${
+                        event.completed
+                          ? 'bg-emerald-500 border-emerald-500 text-white'
+                          : 'border-slate-500 bg-slate-900/40 hover:border-primary-400'
+                      }`}
+                    >
+                      {event.completed && <CheckCircle className="w-3 h-3 stroke-[3]" />}
+                    </button>
+                    <div className="min-w-0 ml-1">
+                      <span className="font-extrabold text-[8px] uppercase tracking-wider block opacity-75">
+                        {event.subject} {event.isRevision && '📝'}
+                      </span>
+                      <p className={`font-semibold text-slate-200 mt-0.5 truncate ${event.completed ? 'line-through opacity-60' : ''}`}>
+                        {event.title.replace(`${event.subject}: `, '')}
+                      </p>
+                      <span className="text-[9px] text-slate-400 font-mono mt-0.5 block">{event.hours} hrs study</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleDeleteEvent(event.id)}
+                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer ml-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+
+              {studyPlanEvents.filter(ev => ev.date === activeMobileDay).length === 0 && (
+                <div className="text-center py-10">
+                  <span className="text-2xl">🎉</span>
+                  <p className="text-slate-500 text-xs mt-2 font-medium">No study tasks scheduled for this day.</p>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="glass-panel p-5 rounded-2xl border border-white/5 flex gap-4 items-start bg-gradient-to-tr from-dark-900 to-purple-950/10">
             <Info className="w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5" />
             <div className="text-xs space-y-1">
@@ -689,8 +878,72 @@ const CalendarPlanner = () => {
               </p>
             </div>
           </div>
+
+          {/* AI Explanation Blueprint Panel */}
+          {aiExplanation && (
+            <div className="glass-panel p-6 rounded-2xl border border-white/5 bg-gradient-to-br from-dark-900 via-[#120b24]/5 to-dark-900 shadow-xl space-y-4">
+              <h3 className="text-base font-extrabold text-white flex items-center gap-2 pb-2 border-b border-slate-850">
+                <Sparkles className="w-5 h-5 text-purple-400 animate-pulse" />
+                🤖 AI Study Blueprint Explanation
+              </h3>
+              <div className="space-y-3 text-xs leading-relaxed text-slate-300">
+                {aiExplanation.split('\n').filter(line => line.trim().length > 0).map((line, i) => {
+                  const cleanedLine = line.replace(/^[-\*\d\.\s]+/, '').trim();
+                  return (
+                    <div key={i} className="flex gap-3 items-start bg-slate-900/40 border border-slate-850 p-3 rounded-xl hover:border-slate-800 transition-all">
+                      <div className="w-1.5 h-1.5 bg-primary-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                      <p className="font-medium text-slate-200">
+                        {cleanedLine}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* AI Rebalance Results Modal */}
+      {rebalanceResult.isOpen && (
+        <div className="fixed inset-0 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
+          <div className="glass-panel border border-white/10 p-6 rounded-2xl w-full max-w-md relative z-10 shadow-2xl animate-in zoom-in-95 duration-200 space-y-4 bg-gradient-to-tr from-dark-950 via-[#13072e]/20 to-dark-900">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-xl">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">{rebalanceResult.title}</h3>
+                <p className="text-xs text-slate-400">Adaptive AI Schedule Updates</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 bg-[#0c1220] p-4 border border-slate-850 rounded-xl leading-relaxed font-semibold">
+              {rebalanceResult.explanation}
+            </p>
+
+            <button
+              onClick={() => setRebalanceResult(prev => ({ ...prev, isOpen: false }))}
+              className="w-full btn-primary py-2.5 rounded-xl text-xs font-bold cursor-pointer"
+            >
+              Back to Planner
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Overlay */}
+      {isGenerating && (
+        <div className="fixed inset-0 bg-dark-900/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
+          <div className="glass-panel border border-white/10 p-8 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-2xl bg-gradient-to-tr from-dark-950 via-primary-950/20 to-dark-900">
+            <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            <h3 className="font-extrabold text-white text-base">Creating Your Study Roadmap</h3>
+            <p className="text-xs text-primary-400 font-bold animate-pulse tracking-wide">
+              {progressiveLoadText}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -48,7 +48,11 @@ const StudyPlanSchema = new mongoose.Schema({
   },
   startDate: Date,
   dailyStudyHours: Number,
-  schedule: [DaySchema]
+  schedule: [DaySchema],
+  aiExplanation: {
+    type: String,
+    default: ''
+  }
 }, { timestamps: true })
 
 export default mongoose.model('StudyPlan', StudyPlanSchema)
