@@ -27,6 +27,11 @@ const ChapterSchema = new mongoose.Schema({
   order: {
     type: Number,
     default: 0
+  },
+  prerequisite: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Chapter',
+    default: null
   }
 }, { timestamps: true })
 

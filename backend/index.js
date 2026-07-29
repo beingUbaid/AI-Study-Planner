@@ -1,8 +1,16 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
+import mongoSanitize from 'express-mongo-sanitize'
+import cookieParser from 'cookie-parser'
 import connectDB from './src/config/db.js'
 import passport from './src/config/passport.js'
+
+// middlewares
+import { globalLimiter } from './src/middleware/rateLimiter.js'
+import { globalErrorHandler } from './src/middleware/errorMiddleware.js'
+import logger from './src/utils/logger.js'
 
 // routes
 import authRoutes from './src/routes/auth.js'
@@ -20,11 +28,33 @@ connectDB()
 
 const app = express()
 
+// Security headers
+app.use(helmet())
+
+// CORS setup
 app.use(cors({
   origin: process.env.CLIENT_URL,
   credentials: true
 }))
-app.use(express.json())
+
+app.use(cookieParser())
+
+// JSON parser with body size limit for DOS protection
+app.use(express.json({ limit: '10kb' }))
+
+// Sanitize MongoDB inputs against injection attacks
+app.use(mongoSanitize())
+
+// Global request rate limiter
+app.use(globalLimiter)
+
+// Simple request logger middleware
+app.use((req, res, next) => {
+  logger.info(`${req.method} ${req.originalUrl}`);
+  next();
+})
+
+// Initialize passport
 app.use(passport.initialize())
 
 // all routes
@@ -44,5 +74,8 @@ app.get('/', (req, res) => {
 // start cron jobs
 startCronJobs()
 
+// Centralized error handler (must be the last middleware)
+app.use(globalErrorHandler)
+
 const PORT = process.env.PORT || 5000
-app.listen(PORT, () => console.log(`Server running on port ${PORT} 🚀`))
+app.listen(PORT, () => logger.info(`Server running on port ${PORT} 🚀`))

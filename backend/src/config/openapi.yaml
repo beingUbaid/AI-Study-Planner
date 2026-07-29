@@ -1,0 +1,198 @@
+openapi: 3.0.3
+info:
+  title: AI Study Planner SaaS API
+  description: Production-grade API specification for the AI Study Planner application. Handles authentication, dynamic scheduling, AI processing, and learning analytics.
+  version: 1.0.0
+servers:
+  - url: /api
+    description: Local development server
+paths:
+  /auth/register:
+    post:
+      summary: Register a new student account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - password
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minimum: 6
+      responses:
+        '201':
+          description: Registration successful, code sent.
+        '400':
+          description: Email already registered or invalid fields.
+
+  /auth/verify-email:
+    post:
+      summary: Verify account using code sent to email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - code
+              properties:
+                email:
+                  type: string
+                  format: email
+                code:
+                  type: string
+                  example: "123456"
+      responses:
+        '200':
+          description: Email verified, access token returned.
+
+  /auth/login:
+    post:
+      summary: Log in to the application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Access token returned, refresh cookie set.
+        '401':
+          description: Invalid credentials.
+        '423':
+          description: Account temporarily locked due to failed attempts.
+
+  /auth/refresh:
+    post:
+      summary: Rotate and refresh authentication tokens
+      responses:
+        '200':
+          description: New access token generated.
+        '401':
+          description: Invalid or expired refresh token.
+
+  /auth/logout:
+    post:
+      summary: Log out and invalidate active refresh tokens
+      responses:
+        '200':
+          description: Logout successful.
+
+  /planner/schedule:
+    get:
+      summary: Get user's active study schedule
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Retrieved active study plan.
+        '404':
+          description: Study plan not found.
+
+  /planner/complete:
+    patch:
+      summary: Mark a task as completed/pending
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - dayIndex
+                - taskIndex
+              properties:
+                dayIndex:
+                  type: integer
+                taskIndex:
+                  type: integer
+      responses:
+        '200':
+          description: Task completion status toggled.
+
+  /planner/rebalance:
+    post:
+      summary: Trigger AI auto-rebalance for missed study sessions
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Missed study items redistributed.
+
+  /ai/upload-pdf:
+    post:
+      summary: Upload syllabus PDF to extract chapters in background
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - subjectId
+              properties:
+                file:
+                  type: string
+                  format: binary
+                subjectId:
+                  type: string
+      responses:
+        '202':
+          description: Job accepted and queued in the background.
+
+  /ai/job/{jobId}:
+    get:
+      summary: Poll status of a background job
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job status details returned (pending, processing, completed, failed).
+
+  /analytics/summary:
+    get:
+      summary: Retrieve all-time metrics, streaks, burnout, and forecasts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Complete study summary and forecasting metrics.
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

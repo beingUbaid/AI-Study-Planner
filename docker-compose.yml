@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6-jammy
+    container_name: study_planner_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - study_planner_net
+    restart: always
+
+  backend:
+    build: ./backend
+    container_name: study_planner_backend
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - MONGO_URI=mongodb://mongodb:27017/studyplanner
+      - CLIENT_URL=http://localhost:80
+      - JWT_SECRET=production_jwt_access_secret_987654321
+      - JWT_REFRESH_SECRET=production_jwt_refresh_secret_123456789
+      - NODE_ENV=production
+    depends_on:
+      - mongodb
+    networks:
+      - study_planner_net
+    restart: always
+
+  frontend:
+    build: ./frontend
+    container_name: study_planner_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - study_planner_net
+    restart: always
+
+volumes:
+  mongo_data:
+
+networks:
+  study_planner_net:
+    driver: bridge

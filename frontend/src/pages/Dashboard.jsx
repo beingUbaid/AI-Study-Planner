@@ -24,6 +24,7 @@ import {
   BrainCircuit
 } from 'lucide-react';
 import { plannerAPI, analyticsAPI } from '../services/api';
+import { SkeletonCard, SkeletonList } from '../components/Skeleton';
 
 const Dashboard = () => {
   const {
@@ -42,6 +43,10 @@ const Dashboard = () => {
   const [aiInsights, setAiInsights] = useState([]);
   const [loadingInsights, setLoadingInsights] = useState(true);
   const [rebalanceResult, setRebalanceResult] = useState({ isOpen: false, title: "", explanation: "" });
+
+  // --- SaaS SUMMARY & ANALYTICS STATE ---
+  const [summaryData, setSummaryData] = useState(null);
+  const [loadingSummary, setLoadingSummary] = useState(true);
 
   // --- STATE FOR WIZARD BACKWARD COMPATIBILITY ---
   const [assessmentCompleted, setAssessmentCompleted] = useState(() => {
@@ -92,9 +97,24 @@ const Dashboard = () => {
     }
   };
 
+  const fetchSummaryData = async () => {
+    try {
+      setLoadingSummary(true);
+      const { data, ok } = await analyticsAPI.summary();
+      if (ok && data) {
+        setSummaryData(data);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch summary data in Dashboard:", err);
+    } finally {
+      setLoadingSummary(false);
+    }
+  };
+
   useEffect(() => {
     fetchDashboardData();
     fetchInsightsData();
+    fetchSummaryData();
 
     // Check onboarding cache
     const isCompleted = localStorage.getItem('study_assessment_completed');
@@ -167,16 +187,40 @@ const Dashboard = () => {
   // --- HANDLERS ---
   const handleToggleTask = async (task, idx) => {
     if (activePlan) {
-      // Find today's day index in DB schedule
       const dayIndex = activePlan.schedule.findIndex(day => new Date(day.date).toDateString() === todayDateStr);
       if (dayIndex !== -1) {
+        // Optimistic update of task completion
+        const previousPlan = { ...activePlan };
+        const updatedSchedule = [...activePlan.schedule];
+        const updatedTasks = [...updatedSchedule[dayIndex].tasks];
+        
+        updatedTasks[idx] = { 
+          ...updatedTasks[idx], 
+          isCompleted: !updatedTasks[idx].isCompleted 
+        };
+        updatedSchedule[dayIndex] = {
+          ...updatedSchedule[dayIndex],
+          tasks: updatedTasks
+        };
+
+        setActivePlan({
+          ...activePlan,
+          schedule: updatedSchedule
+        });
+
         try {
           const { ok } = await plannerAPI.markComplete({ dayIndex, taskIndex: idx });
-          if (ok) {
-            fetchDashboardData();
+          if (!ok) {
+            // Revert local state if request failed
+            setActivePlan(previousPlan);
+          } else {
+            // Track session logs asynchronously
+            await analyticsAPI.log();
+            fetchSummaryData();
           }
         } catch (err) {
           console.error("Failed to sync task toggle on dashboard:", err);
+          setActivePlan(previousPlan);
         }
       }
     } else {
@@ -684,10 +728,10 @@ const Dashboard = () => {
               </div>
               <div className="space-y-1">
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Study Streak Shield</p>
-                <h4 className="text-base font-extrabold text-white mt-0.5">{streak} Days 🔥</h4>
+                <h4 className="text-base font-extrabold text-white mt-0.5">{summaryData?.streak?.current ?? streak} Days 🔥</h4>
                 <p className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
                   <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
-                  Active Shield Shield Enabled
+                  Active Shield Enabled
                 </p>
               </div>
             </div>
@@ -921,7 +965,31 @@ const Dashboard = () => {
                 </div>
 
                 <div className="space-y-3.5">
-                  {subjects.length > 0 ? (
+                  {loadingSummary ? (
+                    <SkeletonList count={3} />
+                  ) : summaryData?.subjectMastery && summaryData.subjectMastery.length > 0 ? (
+                    summaryData.subjectMastery.map(subj => (
+                      <div key={subj.name} className="space-y-1.5 text-xs">
+                        <div className="flex justify-between items-center text-slate-350">
+                          <span className="font-semibold">{subj.name}</span>
+                          <span className="font-bold text-[10px] font-mono">{subj.mastery}% Mastery</span>
+                        </div>
+                        <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden border border-slate-850">
+                          <div 
+                            className="h-full rounded-full transition-all duration-500" 
+                            style={{ 
+                              width: `${subj.mastery}%`, 
+                              backgroundColor: subj.color || '#a855f7' 
+                            }}
+                          ></div>
+                        </div>
+                        <div className="flex justify-between text-[9px] text-slate-500">
+                          <span>Completion: {subj.completionRate}%</span>
+                          {subj.quizAverage !== null && <span>Quiz Avg: {subj.quizAverage}%</span>}
+                        </div>
+                      </div>
+                    ))
+                  ) : subjects.length > 0 ? (
                     subjects.slice(0, 3).map(subj => {
                       const subjTasks = allPlanTasks.filter(t => t.subjectName === subj.name);
                       const subjCompleted = subjTasks.filter(t => t.isCompleted).length;
@@ -951,6 +1019,53 @@ const Dashboard = () => {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* AI Learning Forecast & Wellness */}
+              <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4">
+                <div className="pb-3 border-b border-slate-850">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-teal-400" />
+                    AI Learning Forecast & Wellness
+                  </h3>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Predictive forecasting based on study metrics</p>
+                </div>
+                {loadingSummary ? (
+                  <div className="h-24 bg-slate-800/40 rounded-xl animate-pulse"></div>
+                ) : (
+                  <div className="space-y-3.5 text-xs">
+                    <div className="flex justify-between items-center bg-slate-900/30 p-2.5 rounded-xl border border-slate-800/50">
+                      <div>
+                        <p className="text-slate-400 text-[10px] font-semibold">Forecasted Completion</p>
+                        <p className="font-extrabold text-white mt-0.5">
+                          {summaryData?.forecasting?.forecastedCompletionDate 
+                            ? new Date(summaryData.forecasting.forecastedCompletionDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                            : 'N/A'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-slate-400 text-[10px] font-semibold">Current Velocity</p>
+                        <p className="font-extrabold text-white mt-0.5">{summaryData?.forecasting?.velocity || '0'}h / day</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/30 border border-slate-800/50">
+                      <div className="flex-1 pr-2">
+                        <p className="text-slate-400 text-[10px] font-semibold">Burnout Risk Indicator</p>
+                        <p className="text-slate-500 text-[9px] font-medium leading-tight mt-0.5">{summaryData?.burnout?.message}</p>
+                      </div>
+                      <span className={`font-black text-[10px] uppercase px-2 py-0.5 rounded border flex-shrink-0 ${
+                        summaryData?.burnout?.risk === 'High' 
+                          ? 'bg-red-500/10 text-red-400 border-red-500/20' 
+                          : summaryData?.burnout?.risk === 'Medium' 
+                          ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' 
+                          : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                      }`}>
+                        {summaryData?.burnout?.risk || 'Low'}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Gamified Weekly Consistency Grid */}

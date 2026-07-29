@@ -1,41 +1,45 @@
 /**
- * Algorithmic rebalancing helper.
- * Redistributes uncompleted tasks from past days into today and future days
- * without exceeding the daily study hours limit, or appends new days if needed.
- * 
- * @param {Object} studyPlan - The Mongoose StudyPlan document
- * @param {Date} today - Date object for today at midnight
- * @returns {Object} { rescheduledCount, missedTasks }
+ * Advanced Rescheduling Rebalancer
+ * Collects incomplete tasks from past dates and redistributes them into future days,
+ * appending reasons and maintaining daily workloads.
  */
 export const rebalanceStudyPlan = (studyPlan, today) => {
-  const missedTasks = []
+  const missedTasks = [];
 
   // 1. Collect uncompleted tasks from past days
   studyPlan.schedule.forEach(day => {
-    const dayDate = new Date(day.date)
-    dayDate.setHours(0, 0, 0, 0)
+    const dayDate = new Date(day.date);
+    dayDate.setHours(0, 0, 0, 0);
 
     if (dayDate < today) {
-      const uncompleted = day.tasks.filter(t => !t.isCompleted)
-      missedTasks.push(...uncompleted)
+      const uncompleted = day.tasks.filter(t => !t.isCompleted);
+      
+      // Update reason to track rescheduling telemetry
+      uncompleted.forEach(task => {
+        const dateStr = dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        task.reason = `${task.reason || ''} [Shifted from missed day: ${dateStr}]`.trim();
+      });
+
+      missedTasks.push(...uncompleted);
+      
       // Keep only completed tasks in past days
-      day.tasks = day.tasks.filter(t => t.isCompleted)
-      day.totalHours = day.tasks.reduce((sum, t) => sum + (t.estimatedHours || 1), 0)
+      day.tasks = day.tasks.filter(t => t.isCompleted);
+      day.totalHours = day.tasks.reduce((sum, t) => sum + (t.estimatedHours || 1), 0);
     }
-  })
+  });
 
   if (missedTasks.length === 0) {
-    return { rescheduledCount: 0, missedTasks }
+    return { rescheduledCount: 0, missedTasks };
   }
 
   // 2. Redistribute missed tasks into today and future days
-  let missedIdx = 0
+  let missedIdx = 0;
   studyPlan.schedule.forEach(day => {
-    const dayDate = new Date(day.date)
-    dayDate.setHours(0, 0, 0, 0)
+    const dayDate = new Date(day.date);
+    dayDate.setHours(0, 0, 0, 0);
 
     if (dayDate >= today && !day.isBreakDay && missedIdx < missedTasks.length) {
-      const currentHours = day.tasks.reduce((sum, t) => sum + (t.estimatedHours || 1), 0)
+      const currentHours = day.tasks.reduce((sum, t) => sum + (t.estimatedHours || 1), 0);
       
       // Determine dynamic limit:
       // If the upcoming task has an examDate and it's within 2 days of this day, allow up to 8 hours
@@ -51,34 +55,41 @@ export const rebalanceStudyPlan = (studyPlan, today) => {
         }
       }
 
-      let availableHours = Math.max(0, dailyLimit - currentHours)
+      let availableHours = Math.max(0, dailyLimit - currentHours);
 
       while (missedIdx < missedTasks.length && availableHours > 0) {
-        const taskToMove = missedTasks[missedIdx]
-        day.tasks.push(taskToMove)
-        availableHours -= (taskToMove.estimatedHours || 1)
-        missedIdx++
+        const taskToMove = missedTasks[missedIdx];
+        
+        // Ensure task has estimate
+        const est = taskToMove.estimatedHours || 1;
+        if (availableHours >= est || day.tasks.length === 0) { // Always allow at least one task per day to prevent blocking
+          day.tasks.push(taskToMove);
+          availableHours -= est;
+          missedIdx++;
+        } else {
+          break; // Doesn't fit, move to next day
+        }
       }
 
-      day.totalHours = day.tasks.reduce((sum, t) => sum + (t.estimatedHours || 1), 0)
+      day.totalHours = day.tasks.reduce((sum, t) => sum + (t.estimatedHours || 1), 0);
     }
-  })
+  });
 
   // 3. If any missed tasks remain, append new day(s) at the end
   if (missedIdx < missedTasks.length) {
-    const lastDay = studyPlan.schedule[studyPlan.schedule.length - 1]
-    const lastDate = new Date(lastDay.date)
+    const lastDay = studyPlan.schedule[studyPlan.schedule.length - 1];
+    const lastDate = new Date(lastDay.date);
 
     while (missedIdx < missedTasks.length) {
-      lastDate.setDate(lastDate.getDate() + 1)
-      const newDayTasks = []
-      let hoursUsed = 0
+      lastDate.setDate(lastDate.getDate() + 1);
+      const newDayTasks = [];
+      let hoursUsed = 0;
 
       while (missedIdx < missedTasks.length && hoursUsed < studyPlan.dailyStudyHours) {
-        const taskToMove = missedTasks[missedIdx]
-        newDayTasks.push(taskToMove)
-        hoursUsed += (taskToMove.estimatedHours || 1)
-        missedIdx++
+        const taskToMove = missedTasks[missedIdx];
+        newDayTasks.push(taskToMove);
+        hoursUsed += (taskToMove.estimatedHours || 1);
+        missedIdx++;
       }
 
       studyPlan.schedule.push({
@@ -87,12 +98,12 @@ export const rebalanceStudyPlan = (studyPlan, today) => {
         tasks: newDayTasks,
         totalHours: hoursUsed,
         isBreakDay: false
-      })
+      });
     }
   }
 
   return {
     rescheduledCount: missedTasks.length,
     missedTasks
-  }
-}
+  };
+};

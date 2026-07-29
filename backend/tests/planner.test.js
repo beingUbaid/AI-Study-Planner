@@ -112,7 +112,7 @@ try {
     name: 'Mastered Course',
     color: '#00ff00',
     examDate: new Date(2026, 6, 30),
-    quizPerformance: [{ score: 90 }],
+    quizPerformance: [{ score: 96 }],
     chapters: [
       { _id: 'chap-1', name: 'Mastered Chap 1', estimatedHours: 4 }
     ]

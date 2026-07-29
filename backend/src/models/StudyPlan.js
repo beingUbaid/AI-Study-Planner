@@ -20,6 +20,14 @@ const TaskSchema = new mongoose.Schema({
   isRevision: {
     type: Boolean,
     default: false
+  },
+  reason: {
+    type: String,
+    default: ''
+  },
+  stage: {
+    type: Number,
+    default: 1 // Leitner Box 1-5
   }
 })
 

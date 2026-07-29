@@ -40,8 +40,26 @@ const UserSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    refreshTokens: {
+      type: [String],
+      default: [],
+    },
+    loginAttempts: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    lockUntil: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true },
 );
+
+// Virtual for checking if user is currently locked out
+UserSchema.virtual('isLocked').get(function() {
+  return !!(this.lockUntil && this.lockUntil > Date.now());
+});
 
 export default mongoose.model("User", UserSchema);

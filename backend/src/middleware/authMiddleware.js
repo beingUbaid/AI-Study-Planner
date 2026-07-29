@@ -1,21 +1,24 @@
-import jwt from 'jsonwebtoken'
+import { verifyAccessToken } from '../services/tokenService.js';
+import AppError from '../utils/appError.js';
+import { catchAsync } from './errorMiddleware.js';
 
-const authMiddleware = (req, res, next) => {
-
-  const token = req.header('Authorization')?.replace('Bearer ', '')
+const authMiddleware = catchAsync(async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.startsWith('Bearer ')
+    ? authHeader.split(' ')[1]
+    : null;
 
   if (!token) {
-    return res.status(401).json({ message: 'No token, access denied' })
+    return next(new AppError('Authentication failed. No token provided.', 401));
   }
 
   try {
-    // verify token is valid
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    req.user = decoded 
-    next() 
+    const decoded = verifyAccessToken(token);
+    req.user = decoded; // Contains user id (decoded.id)
+    next();
   } catch (error) {
-    res.status(401).json({ message: 'Invalid token' })
+    return next(new AppError('Authentication failed. Invalid or expired token.', 401));
   }
-}
+});
 
-export default authMiddleware
+export default authMiddleware;

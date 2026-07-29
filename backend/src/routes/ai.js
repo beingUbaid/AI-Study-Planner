@@ -1,47 +1,55 @@
-import express from 'express'
-import multer from 'multer'
+import express from 'express';
+import multer from 'multer';
+import fs from 'fs';
 import {
   aiGenerateSchedule,
   aiChat,
   uploadPDF,
   aiGenerateFlashcards,
   aiGenerateQuiz,
-  aiGenerateExamMode
-} from '../controllers/aiController.js'
-import authMiddleware from '../middleware/authMiddleware.js'
+  aiGenerateExamMode,
+  getJobStatus
+} from '../controllers/aiController.js';
+import authMiddleware from '../middleware/authMiddleware.js';
 
-const router = express.Router()
+// Ensure uploads folder exists
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads');
+}
+
+const router = express.Router();
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/')
+    cb(null, 'uploads/');
   },
   filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`)
+    cb(null, `${Date.now()}-${file.originalname}`);
   }
-})
+});
 
 const fileFilter = (req, file, cb) => {
   if (file.mimetype === 'application/pdf') {
-    cb(null, true)
+    cb(null, true);
   } else {
-    cb(new Error('Only PDF files are allowed'), false)
+    cb(new Error('Only PDF files are allowed'), false);
   }
-}
+};
 
 const upload = multer({ 
   storage, 
   fileFilter,
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
-})
+});
 
-router.use(authMiddleware)
+router.use(authMiddleware);
 
-router.post('/generate-schedule', aiGenerateSchedule)
-router.post('/chat', aiChat)
-router.post('/upload-pdf', upload.single('file'), uploadPDF)
-router.post('/generate-flashcards', aiGenerateFlashcards)
-router.post('/generate-quiz', aiGenerateQuiz)
-router.post('/generate-exam-mode', aiGenerateExamMode)
+router.post('/generate-schedule', aiGenerateSchedule);
+router.post('/chat', aiChat);
+router.post('/upload-pdf', upload.single('file'), uploadPDF);
+router.post('/generate-flashcards', aiGenerateFlashcards);
+router.post('/generate-quiz', aiGenerateQuiz);
+router.post('/generate-exam-mode', aiGenerateExamMode);
+router.get('/job/:jobId', getJobStatus);
 
-export default router
+export default router;

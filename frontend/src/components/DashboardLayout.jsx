@@ -15,14 +15,18 @@ import {
   X,
   Play,
   Loader2,
-  Menu
+  Menu,
+  Sun,
+  Moon
 } from 'lucide-react';
-import { subjectsAPI, dashboardAPI, analyticsAPI, aiAPI, plannerAPI } from '../services/api';
+import { subjectsAPI, dashboardAPI, analyticsAPI, aiAPI, plannerAPI, authAPI } from '../services/api';
 import Logo from './Logo';
+import { useTheme } from '../context/ThemeContext';
 
 const DashboardLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme, toggleTheme } = useTheme();
 
   // --- SHARED STATE ---
   // Tasks state
@@ -222,20 +226,13 @@ const DashboardLayout = () => {
     return () => clearInterval(interval);
   }, [timerActive, timeLeft, timerMode, customMinutes]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user_email');
-    localStorage.removeItem('user_name');
-    localStorage.removeItem('study_tasks');
-    localStorage.removeItem('study_exams');
-    localStorage.removeItem('study_subjects');
-    localStorage.removeItem('study_today_hours');
-    localStorage.removeItem('study_streak');
-    localStorage.removeItem('study_notifications');
-    localStorage.removeItem('study_weekly_hours');
-    localStorage.removeItem('study_assessment_completed');
-    localStorage.removeItem('last_ai_result');
-    localStorage.removeItem('study_calendar_events');
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout();
+    } catch (err) {
+      // Ignored
+    }
+    localStorage.clear();
     navigate('/login');
   };
 
@@ -496,6 +493,15 @@ const DashboardLayout = () => {
           </div>
 
           <div className="flex items-center gap-4">
+
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-slate-800 transition-colors text-slate-300 hover:text-white cursor-pointer"
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
 
             {/* Notifications */}
             <div className="relative">
