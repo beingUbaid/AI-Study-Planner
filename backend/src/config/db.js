@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import logger from '../utils/logger.js';
+import { env } from './env.js';
 
 const connectDB = async () => {
   const options = {
@@ -9,7 +10,7 @@ const connectDB = async () => {
     family: 4 // force IPv4
   };
 
-  const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/ai-study-planner';
+  const MONGO_URI = env.MONGO_URI;
   const retries = 5;
   const delayMs = 5000;
 

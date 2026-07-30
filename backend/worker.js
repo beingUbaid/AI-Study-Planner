@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { env } from './src/config/env.js';
 import mongoose from 'mongoose';
-import { startCronJobs } from './src/utils/cronJobs.js';
+import { startCronJobs, getActiveDeliveriesCount } from './src/utils/cronJobs.js';
 import logger from './src/utils/logger.js';
 
 logger.info('Starting standalone background worker... ⚙️');
@@ -36,8 +36,13 @@ const shutdown = async (signal) => {
   }
 
   // 2. Wait safely for active work within a bounded timeout (drain active cron executions)
-  logger.info('Worker waiting for active tasks to complete (bounded timeout: 3 seconds)...');
-  await new Promise(resolve => setTimeout(resolve, 3000));
+  logger.info('Worker waiting for active delivery tasks to complete (5s bounded timeout)...');
+  const shutdownTimeout = Date.now() + 5000;
+  while (getActiveDeliveriesCount() > 0 && Date.now() < shutdownTimeout) {
+    logger.info(`Active delivery tasks running: ${getActiveDeliveriesCount()}. Waiting...`);
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  logger.info('Draining active delivery tasks complete or timeout reached.');
 
   // 3. Close MongoDB database connection
   try {

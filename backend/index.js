@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import './src/config/env.js';
+import { env } from './src/config/env.js';
 import app from './app.js';
 import connectDB from './src/config/db.js';
 import logger from './src/utils/logger.js';
@@ -8,7 +8,7 @@ import mongoose from 'mongoose';
 // Connect Database
 connectDB();
 
-const PORT = process.env.PORT || 5000;
+const PORT = env.PORT;
 const server = app.listen(PORT, () => {
   logger.info(`Server running on port ${PORT} 🚀`);
 });

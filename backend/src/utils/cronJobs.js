@@ -6,6 +6,12 @@ import sendEmail from './sendEmail.js';
 import Lock from '../models/Lock.js';
 import NotificationDelivery from '../models/NotificationDelivery.js';
 import logger from './logger.js';
+import { env } from '../config/env.js';
+
+// Global variable tracking active delivery processes for graceful worker shutdowns
+let activeDeliveriesCount = 0;
+
+export const getActiveDeliveriesCount = () => activeDeliveriesCount;
 
 export const startCronJobs = () => {
 
@@ -19,7 +25,7 @@ export const startCronJobs = () => {
 
     const todayStr = new Date().toISOString().split('T')[0];
     const lockKey = `exam-reminder:${todayStr}`;
-    const durationMs = 60 * 60 * 1000; // 1 hour expiration
+    const durationMs = 60 * 60 * 1000; // 1 hour lock expiration
 
     try {
       // Try to acquire distributed lock for this day
@@ -36,6 +42,7 @@ export const startCronJobs = () => {
       const users = await User.find({ isVerified: true });
 
       for (const user of users) {
+        activeDeliveriesCount++;
         try {
           // get their subjects with exams in next 3 days
           const now = new Date();
@@ -51,21 +58,60 @@ export const startCronJobs = () => {
             continue;
           }
 
-          // Atomically check or claim the reminder task for this user today using NotificationDelivery
-          let logRecord;
-          try {
-            logRecord = await NotificationDelivery.create({
-              user: user._id,
-              subject: null,
-              task: null,
-              reminderType: 'exam_reminder',
-              scheduledDate: todayStr,
-              status: 'claimed',
-              attempts: 1
-            });
-          } catch {
-            // Already sent or claimed
-            logger.info(`Reminder already claimed or processed for user ${user._id} on ${todayStr}`);
+          // Stateful claims & retry logic
+          const existingClaim = await NotificationDelivery.findOne({
+            user: user._id,
+            reminderType: 'exam_reminder',
+            scheduledDate: todayStr
+          });
+
+          let shouldProcess = false;
+          let logRecord = null;
+
+          if (!existingClaim) {
+            // 1. Fresh claim: try to insert atomically
+            try {
+              logRecord = await NotificationDelivery.create({
+                user: user._id,
+                reminderType: 'exam_reminder',
+                scheduledDate: todayStr,
+                status: 'claimed',
+                attempts: 1,
+                nextRetryAt: new Date(Date.now() + 10 * 60 * 1000) // claim expires in 10 minutes
+              });
+              shouldProcess = true;
+            } catch {
+              logger.info(`Claim race condition hit. Skipping run for user ${user._id}`);
+            }
+          } else {
+            // 2. Recovery / Retry claims
+            const isStaleClaim = existingClaim.status === 'claimed' && 
+              (Date.now() - new Date(existingClaim.updatedAt).getTime() > 10 * 60 * 1000);
+            const isReadyRetry = existingClaim.status === 'failed' && 
+              existingClaim.attempts < 3 && 
+              new Date(existingClaim.nextRetryAt) <= now;
+
+            if (isStaleClaim || isReadyRetry) {
+              logRecord = await NotificationDelivery.findOneAndUpdate(
+                {
+                  _id: existingClaim._id,
+                  status: existingClaim.status,
+                  attempts: existingClaim.attempts
+                },
+                {
+                  status: 'claimed',
+                  attempts: existingClaim.attempts + 1,
+                  nextRetryAt: new Date(Date.now() + 10 * 60 * 1000)
+                },
+                { new: true }
+              );
+              if (logRecord) {
+                shouldProcess = true;
+              }
+            }
+          }
+
+          if (!shouldProcess || !logRecord) {
             continue;
           }
 
@@ -100,7 +146,7 @@ export const startCronJobs = () => {
                   : '<p>Great job! All tasks completed! 🎉</p>'
                 }
                 <p>Log in now and keep studying!</p>
-                <a href="${process.env.CLIENT_URL}" 
+                <a href="${env.CLIENT_URL}" 
                    style="background:#667eea; color:white; padding:12px 24px; 
                           border-radius:8px; text-decoration:none;">
                   Study Now 🚀
@@ -109,18 +155,23 @@ export const startCronJobs = () => {
             );
 
             logRecord.status = 'sent';
+            logRecord.lastError = null;
             await logRecord.save();
             logger.info('Daily exam reminder email sent and recorded successfully');
           } catch (sendErr) {
             logRecord.status = 'failed';
-            logRecord.lastError = sendErr.message;
-            logRecord.attempts += 1;
+            logRecord.lastError = sendErr.message; // message contains error type (no PII)
+            // Exponential backoff retry interval
+            const retryDelayMs = logRecord.attempts * 5 * 60 * 1000; 
+            logRecord.nextRetryAt = new Date(Date.now() + retryDelayMs);
             await logRecord.save();
             logger.error(`Failed sending daily reminder email: ${sendErr.message}`);
           }
 
         } catch (innerUserErr) {
           logger.error(`Error processing reminder loop for single user: ${innerUserErr.message}`);
+        } finally {
+          activeDeliveriesCount--;
         }
       }
 

@@ -36,6 +36,10 @@ const NotificationDeliverySchema = new mongoose.Schema({
   lastError: {
     type: String,
     default: null
+  },
+  nextRetryAt: {
+    type: Date,
+    default: null
   }
 }, { timestamps: true });
 

@@ -1,0 +1,14 @@
+node_modules
+tests
+.env
+.env.local
+.git
+.github
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+.vscode
+Dockerfile
+docker-compose.yml

@@ -1,5 +1,6 @@
 import winston from 'winston';
 import { AsyncLocalStorage } from 'async_hooks';
+import { env } from '../config/env.js';
 
 // Instantiate AsyncLocalStorage request store for logging request context globally
 export const requestStore = new AsyncLocalStorage();
@@ -46,7 +47,7 @@ const formatLog = winston.format.printf(({ timestamp, level, message, ...metadat
   const cleanMetadata = redactSensitiveData(metadata);
 
   // Standardized structured JSON output in production for privacy-compliance
-  if (process.env.NODE_ENV === 'production') {
+  if (env.NODE_ENV === 'production') {
     return JSON.stringify({
       timestamp,
       level,
@@ -65,7 +66,7 @@ const formatLog = winston.format.printf(({ timestamp, level, message, ...metadat
 });
 
 const logger = winston.createLogger({
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+  level: env.NODE_ENV === 'production' ? 'info' : 'debug',
   format: winston.format.combine(
     winston.format.timestamp(),
     formatLog

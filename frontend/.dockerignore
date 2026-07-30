@@ -1,0 +1,14 @@
+node_modules
+dist
+tests-e2e
+src/tests
+.env
+.env.local
+.git
+.github
+*.log
+Dockerfile
+docker-compose.yml
+nginx.conf
+vercel.json
+_redirects

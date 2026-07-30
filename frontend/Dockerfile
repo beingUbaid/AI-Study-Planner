@@ -6,15 +6,15 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# ── STAGE 2: PRODUCTION RUNTIME NGINX ──
-FROM nginx:alpine
+# ── STAGE 2: PRODUCTION RUNTIME UNPRIVILEGED NGINX ──
+FROM nginxinc/nginx-unprivileged:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 80
+EXPOSE 8080
 
 # Serve static build healthcheck
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:80/ || exit 1
+  CMD wget --quiet --tries=1 --spider http://localhost:8080/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

@@ -172,7 +172,7 @@ app.get('/ready', async (req, res) => {
 });
 
 app.get('/version', (req, res) => {
-  res.status(200).json({ version: process.env.APP_VERSION || '1.0.0' });
+  res.status(200).json({ version: env.APP_VERSION });
 });
 
 // Standardized 404 handler for unmatched routes

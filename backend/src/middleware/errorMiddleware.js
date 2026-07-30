@@ -1,4 +1,5 @@
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
 const sendErrorDev = (err, res) => {
   res.status(err.statusCode || 500).json({
@@ -18,7 +19,10 @@ const sendErrorProd = (err, res) => {
     });
   } else {
     // Programming or other unknown error: don't leak details
-    logger.error('ERROR 💥', err);
+    logger.error('Production Error Catch 💥', {
+      statusCode: err.statusCode || 500,
+      message: err.isOperational ? err.message : 'Internal Server Error'
+    });
     res.status(500).json({
       status: 'error',
       message: 'Something went wrong on our end.'
@@ -30,7 +34,7 @@ export const globalErrorHandler = (err, req, res, next) => {
   err.statusCode = err.statusCode || 500;
   err.status = err.status || 'error';
 
-  if (process.env.NODE_ENV === 'development') {
+  if (env.NODE_ENV === 'development') {
     sendErrorDev(err, res);
   } else {
     sendErrorProd(err, res);

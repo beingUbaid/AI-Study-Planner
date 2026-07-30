@@ -15,6 +15,7 @@ import {
 } from '../controllers/authController.js';
 import { generateAccessToken, generateRefreshToken, sendRefreshTokenCookie, hashToken } from '../services/tokenService.js';
 import RefreshToken from '../models/RefreshToken.js';
+import { env } from '../config/env.js';
 
 const router = express.Router();
 
@@ -77,7 +78,7 @@ router.get('/google', passport.authenticate('google', {
 
 router.get(
   '/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: `${process.env.CLIENT_URL}/login` }),
+  passport.authenticate('google', { session: false, failureRedirect: `${env.CLIENT_URL}/login` }),
   async (req, res, next) => {
     try {
       const user = req.user;
@@ -95,7 +96,7 @@ router.get(
 
       sendRefreshTokenCookie(res, newRefreshToken);
 
-      res.redirect(`${process.env.CLIENT_URL}/auth/success?token=${accessToken}`);
+      res.redirect(`${env.CLIENT_URL}/auth/success?token=${accessToken}`);
     } catch (error) {
       next(error);
     }
