@@ -12,5 +12,12 @@ export default defineConfig({
         secure: false
       }
     }
+  },
+  test: {
+    environment: 'jsdom',
+    pool: 'forks',
+    forks: {
+      singleFork: true
+    }
   }
 })

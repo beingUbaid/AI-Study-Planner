@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
@@ -11,7 +12,7 @@ export const generateAccessToken = (userId) => {
 };
 
 export const generateRefreshToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, {
+  return jwt.sign({ id: userId, jti: crypto.randomUUID() }, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, {
     expiresIn: REFRESH_TOKEN_EXPIRY
   });
 };

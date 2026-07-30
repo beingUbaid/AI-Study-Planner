@@ -196,3 +196,124 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
+  schemas:
+    Subject:
+      type: object
+      required:
+        - _id
+        - user
+        - name
+        - examDate
+      properties:
+        _id:
+          type: string
+          example: "64befa3149d01cbfa174ba12"
+        user:
+          type: string
+          example: "64befa3149d01cbfa174ba11"
+        name:
+          type: string
+          example: "Machine Learning"
+        examDate:
+          type: string
+          format: date-time
+          example: "2026-08-15T09:00:00.000Z"
+        difficulty:
+          type: string
+          enum: [Easy, Medium, Hard]
+          example: "Hard"
+        color:
+          type: string
+          example: "#ff4444"
+        chapters:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                example: "Neural Networks"
+              estimatedHours:
+                type: number
+                example: 4
+              isCompleted:
+                type: boolean
+                example: false
+
+    Task:
+      type: object
+      required:
+        - chapterName
+        - estimatedHours
+        - isCompleted
+      properties:
+        chapterName:
+          type: string
+          example: "Neural Networks Overview"
+        estimatedHours:
+          type: number
+          example: 3
+        isCompleted:
+          type: boolean
+          example: false
+        isRevision:
+          type: boolean
+          example: false
+        subjectName:
+          type: string
+          example: "Machine Learning"
+        subjectColor:
+          type: string
+          example: "#ff4444"
+        reason:
+          type: string
+          example: "Prioritized due to close exam date and medium topic complexity."
+        stage:
+          type: integer
+          example: 2
+
+    StudyPlan:
+      type: object
+      required:
+        - user
+        - schedule
+      properties:
+        user:
+          type: string
+          example: "64befa3149d01cbfa174ba11"
+        dailyStudyHours:
+          type: number
+          example: 4
+        schedule:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date-time
+                example: "2026-07-28T00:00:00.000Z"
+              dayName:
+                type: string
+                example: "Tuesday"
+              isBreakDay:
+                type: boolean
+                example: false
+              tasks:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          example: "fail"
+        message:
+          type: string
+          example: "Authentication token is missing or expired."

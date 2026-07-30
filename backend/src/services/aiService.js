@@ -11,7 +11,7 @@ const DEFAULT_MODEL = 'llama-3.1-8b-instant';
 // Helper to wait for exponential backoff
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Call Groq API with retries and exponential backoff
+// Call Groq API with retries, timeouts, latency tracking, and exponential backoff
 export const callLLM = async ({
   messages,
   maxTokens = 1000,
@@ -36,11 +36,18 @@ export const callLLM = async ({
       }
 
       logger.info(`Sending request to LLM (Model: ${model}, Attempt: ${attempt + 1})`);
-      const completion = await groq.chat.completions.create(options);
-
+      const start = Date.now();
+      
+      // Set a 15-second timeout limit for Groq API calls to avoid server hangs
+      const completion = await groq.chat.completions.create(options, { timeout: 15000 });
+      
+      const latency = Date.now() - start;
       const usage = completion.usage;
+      
       if (usage) {
-        logger.info(`LLM Usage | Prompt: ${usage.prompt_tokens} | Completion: ${usage.completion_tokens} | Total: ${usage.total_tokens}`);
+        logger.info(`LLM Metrics | Prompt Tokens: ${usage.prompt_tokens} | Completion Tokens: ${usage.completion_tokens} | Total Tokens: ${usage.total_tokens} | Latency: ${latency}ms`);
+      } else {
+        logger.info(`LLM Metrics | Latency: ${latency}ms`);
       }
 
       return completion.choices[0].message.content;

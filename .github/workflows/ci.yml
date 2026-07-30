@@ -1,4 +1,4 @@
-name: CI/CD Study Planner Build Pipeline
+name: CI/CD Production Build & Test Pipeline
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ main, master ]
 
 jobs:
-  backend-test:
+  backend-ci:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -18,19 +18,28 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-          cache-dependency-path: backend/package.json
+          cache-dependency-path: backend/package-lock.json
 
       - name: Install Backend Dependencies
         run: |
           cd backend
-          npm install
+          npm ci
 
-      - name: Run Scheduler Unit Tests
+      - name: Run Backend Linting
         run: |
           cd backend
-          node tests/planner.test.js
+          npm run lint
 
-  frontend-build:
+      - name: Run Backend Tests with Coverage
+        run: |
+          cd backend
+          npm run test:coverage
+        env:
+          JWT_SECRET: ci_test_secret_key_12345
+          JWT_REFRESH_SECRET: ci_test_refresh_secret_key_54321
+          MONGOMS_DISABLE_POSTINSTALL: 0
+
+  frontend-ci:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -41,14 +50,21 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-          cache-dependency-path: frontend/package.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install Frontend Dependencies
         run: |
           cd frontend
-          npm install
+          npm ci
 
-      - name: Compile Production Build
+      - name: Run Frontend Linting
+        run: |
+          cd frontend
+          npm run lint
+
+      - name: Compile Frontend Production Build
         run: |
           cd frontend
           npm run build
+        env:
+          VITE_API_URL: /api

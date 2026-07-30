@@ -9,7 +9,14 @@ const CURRENT_LEVEL = process.env.NODE_ENV === 'production' ? LEVELS.INFO : LEVE
 
 const formatMessage = (level, message, meta) => {
   const timestamp = new Date().toISOString();
-  const metaString = meta ? ` | Meta: ${JSON.stringify(meta)}` : '';
+  let metaString = '';
+  if (meta) {
+    if (meta instanceof Error) {
+      metaString = ` | Error: ${meta.message} | Stack: ${meta.stack}`;
+    } else {
+      metaString = ` | Meta: ${JSON.stringify(meta)}`;
+    }
+  }
   return `[${timestamp}] [${level}] ${message}${metaString}`;
 };
 

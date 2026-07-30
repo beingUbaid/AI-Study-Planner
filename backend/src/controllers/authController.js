@@ -201,7 +201,7 @@ export const refreshToken = catchAsync(async (req, res, next) => {
   }
 
   // Rotate token: remove old one, generate new one
-  user.refreshTokens = user.refreshTokens.filter(t => t !== token);
+  user.refreshTokens.pull(token);
 
   const newAccessToken = generateAccessToken(user._id);
   const newRefreshToken = generateRefreshToken(user._id);
@@ -228,7 +228,7 @@ export const logout = catchAsync(async (req, res, next) => {
       decoded = verifyRefreshToken(token);
       const user = await User.findById(decoded.id);
       if (user) {
-        user.refreshTokens = user.refreshTokens.filter(t => t !== token);
+        user.refreshTokens.pull(token);
         await user.save();
       }
     } catch (err) {

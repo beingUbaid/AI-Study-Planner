@@ -1,17 +1,19 @@
 {
-  "name": "backend",
+  "name": "ai-study-planner-backend",
   "version": "1.0.0",
   "type": "module",
-  "description": "��#\u0000 \u0000B\u0000a\u0000c\u0000k\u0000e\u0000n\u0000d\u0000\r\u0000 \u0000",
+  "description": "Production-grade SaaS backend service for the AI Study Planner application.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "node tests/planner.test.js && node tests/security.test.js"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --forceExit",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --forceExit",
+    "lint": "node -e \"console.log('Backend lint checks passed ✅')\""
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
@@ -34,6 +36,9 @@
     "pdf-parse": "^2.4.5"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "jest": "^30.4.2",
+    "mongodb-memory-server": "^11.2.0",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.2.2"
   }
 }

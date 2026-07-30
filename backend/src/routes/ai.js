@@ -11,6 +11,9 @@ import {
   getJobStatus
 } from '../controllers/aiController.js';
 import authMiddleware from '../middleware/authMiddleware.js';
+import { validatePDFMagicBytes } from '../middleware/uploadValidator.js';
+
+import { uploadLimiter, aiLimiter } from '../middleware/rateLimiter.js';
 
 // Ensure uploads folder exists
 if (!fs.existsSync('uploads')) {
@@ -39,17 +42,17 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({ 
   storage, 
   fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  limits: { fileSize: 5 * 1024 * 1024 } // Hardened 5MB limit for DOS protection
 });
 
 router.use(authMiddleware);
 
-router.post('/generate-schedule', aiGenerateSchedule);
-router.post('/chat', aiChat);
-router.post('/upload-pdf', upload.single('file'), uploadPDF);
-router.post('/generate-flashcards', aiGenerateFlashcards);
-router.post('/generate-quiz', aiGenerateQuiz);
-router.post('/generate-exam-mode', aiGenerateExamMode);
+router.post('/generate-schedule', aiLimiter, aiGenerateSchedule);
+router.post('/chat', aiLimiter, aiChat);
+router.post('/upload-pdf', uploadLimiter, upload.single('file'), validatePDFMagicBytes, uploadPDF);
+router.post('/generate-flashcards', aiLimiter, aiGenerateFlashcards);
+router.post('/generate-quiz', aiLimiter, aiGenerateQuiz);
+router.post('/generate-exam-mode', aiLimiter, aiGenerateExamMode);
 router.get('/job/:jobId', getJobStatus);
 
 export default router;
