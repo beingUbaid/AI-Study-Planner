@@ -24,6 +24,9 @@ import analyticsRoutes from './src/routes/analytics.js';
 
 const app = express();
 
+// Trust proxy for rate limiters (required in production behind cloud proxies/load balancers)
+app.set('trust proxy', 1);
+
 // Security headers with strict CSP configuration
 app.use(helmet({
   contentSecurityPolicy: {
@@ -75,14 +78,21 @@ const sanitizeMongo = (obj) => {
 // Global AsyncLocalStorage request context manager and Request ID validator
 app.use((req, res, next) => {
   const incomingId = req.headers['x-request-id'];
-  const uuidRegex = /^[a-zA-Z0-9-]{1,36}$/;
-  // Validate incoming ID format/length or generate a fresh secure one
-  const requestId = (incomingId && uuidRegex.test(incomingId))
-    ? incomingId
-    : crypto.randomUUID();
+  const correlationIdRegex = /^[a-zA-Z0-9_-]{8,64}$/;
+  
+  const requestId = crypto.randomUUID();
+  let clientCorrelationId = null;
+  
+  if (incomingId && correlationIdRegex.test(incomingId)) {
+    clientCorrelationId = incomingId;
+  }
 
   req.id = requestId;
+  req.correlationId = clientCorrelationId;
   res.setHeader('X-Request-Id', requestId);
+  if (clientCorrelationId) {
+    res.setHeader('X-Correlation-Id', clientCorrelationId);
+  }
   
   const store = { requestId, userId: null };
   requestStore.run(store, () => {
@@ -102,13 +112,31 @@ app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
+    
+    // Sanitize path (strip query string completely)
+    const sanitizedPath = req.originalUrl ? req.originalUrl.split('?')[0] : '';
+    
+    // Truncate IP address (or hash it) to prevent logging raw IP addresses
+    let sanitizedIp = '0.0.0.0';
+    if (req.ip) {
+      if (req.ip.includes(':')) {
+        sanitizedIp = req.ip.split(':').slice(0, 3).join(':') + '::0';
+      } else {
+        sanitizedIp = req.ip.split('.').slice(0, 3).join('.') + '.0';
+      }
+    }
+
+    const userId = req.user ? req.user.id : (requestStore.getStore()?.userId || null);
+
     logger.info('HTTP Request Logs', {
       requestId: req.id,
+      correlationId: req.correlationId,
       method: req.method,
-      url: req.originalUrl,
+      path: sanitizedPath,
       statusCode: res.statusCode,
       durationMs: duration,
-      ip: req.ip
+      ip: sanitizedIp,
+      userId
     });
   });
   next();

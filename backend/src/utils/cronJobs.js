@@ -4,7 +4,7 @@ import Subject from '../models/Subject.js';
 import StudyPlan from '../models/StudyPlan.js';
 import sendEmail from './sendEmail.js';
 import Lock from '../models/Lock.js';
-import ReminderLog from '../models/ReminderLog.js';
+import NotificationDelivery from '../models/NotificationDelivery.js';
 import logger from './logger.js';
 
 export const startCronJobs = () => {
@@ -51,18 +51,21 @@ export const startCronJobs = () => {
             continue;
           }
 
-          // Atomically check or claim the reminder task for this user today
+          // Atomically check or claim the reminder task for this user today using NotificationDelivery
           let logRecord;
           try {
-            logRecord = await ReminderLog.create({
-              userId: user._id,
-              sentDate: todayStr,
+            logRecord = await NotificationDelivery.create({
+              user: user._id,
+              subject: null,
+              task: null,
+              reminderType: 'exam_reminder',
+              scheduledDate: todayStr,
               status: 'claimed',
               attempts: 1
             });
           } catch {
             // Already sent or claimed
-            logger.info(`Reminder already processed/claimed for user on ${todayStr}`);
+            logger.info(`Reminder already claimed or processed for user ${user._id} on ${todayStr}`);
             continue;
           }
 
@@ -105,12 +108,12 @@ export const startCronJobs = () => {
               `
             );
 
-            logRecord.status = 'success';
+            logRecord.status = 'sent';
             await logRecord.save();
             logger.info('Daily exam reminder email sent and recorded successfully');
           } catch (sendErr) {
             logRecord.status = 'failed';
-            logRecord.error = sendErr.message;
+            logRecord.lastError = sendErr.message;
             logRecord.attempts += 1;
             await logRecord.save();
             logger.error(`Failed sending daily reminder email: ${sendErr.message}`);

@@ -25,8 +25,7 @@ const RefreshTokenSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-// Index for fast lookups by token hash and TTL index to auto-delete expired refresh tokens
-RefreshTokenSchema.index({ tokenHash: 1 });
+// Index for fast lookups by family ID and TTL index to auto-delete expired refresh tokens
 RefreshTokenSchema.index({ familyId: 1 });
 RefreshTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 

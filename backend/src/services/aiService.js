@@ -3,6 +3,7 @@ import logger, { requestStore } from '../utils/logger.js';
 import { promptTemplates } from '../utils/promptTemplates.js';
 import { SyllabusSchema, FlashcardSchema, QuizSchema, RoadmapSchema } from '../utils/schemas.js';
 import { env as appEnv } from '../config/env.js';
+import AppError from '../utils/appError.js';
 
 const groq = new Groq({
   apiKey: appEnv.GROQ_API_KEY
@@ -31,12 +32,14 @@ export const callLLM = async ({
 }) => {
   let attempt = 0;
   let delay = 1000; // start with 1 second
+  const messagesHistory = [...messages];
 
   while (attempt < retries) {
+    let rawContent;
     try {
       const options = {
         model,
-        messages,
+        messages: messagesHistory,
         maxTokens,
         temperature: 0.3
       };
@@ -61,7 +64,7 @@ export const callLLM = async ({
       const completion = await groq.chat.completions.create(options, { timeout: 15000 });
       const latency = Date.now() - start;
 
-      const rawContent = completion.choices[0].message.content;
+      rawContent = completion.choices[0].message.content;
       const usage = completion.usage;
       
       let cost = 0;
@@ -92,7 +95,10 @@ export const callLLM = async ({
         // Zod validation
         const validationResult = schema.safeParse(parsedJSON);
         if (!validationResult.success) {
-          throw new Error(`Schema validation failed: ${validationResult.error.message}`);
+          const conciseFeedback = validationResult.error.errors
+            .map(e => `${e.path.join('.')}: ${e.message}`)
+            .join(', ');
+          throw new Error(`Schema validation failed: ${conciseFeedback}`);
         }
 
         // Return validated and parsed data
@@ -111,7 +117,17 @@ export const callLLM = async ({
       });
       
       if (attempt >= retries) {
-        throw new Error(`LLM call failed after ${retries} attempts: ${error.message}`);
+        logger.error('LLM maximum retries exceeded. Throwing controlled operational error.');
+        throw new AppError(`LLM processing failed: ${error.message}. Please try again.`, 502);
+      }
+
+      // Append concise validation feedback back to history for the next retry attempt
+      if (typeof rawContent !== 'undefined') {
+        messagesHistory.push({ role: 'assistant', content: rawContent });
+        messagesHistory.push({
+          role: 'user',
+          content: `The previous response failed schema validation. Error details: ${error.message}. Please output the JSON object again, correcting these issues.`
+        });
       }
 
       await wait(delay);

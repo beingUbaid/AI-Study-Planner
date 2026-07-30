@@ -9,9 +9,6 @@
   
   <br />
   
-  <a href="https://ai-study-planner.vercel.app">
-    <img src="https://img.shields.io/badge/🚀%20Live%20Demo-Explore%20App-teal?style=for-the-badge&logo=vercel" alt="Live Demo" />
-  </a>
   <a href="https://github.com/beingUbaid/AI-Study-Planner">
     <img src="https://img.shields.io/badge/⭐%20Star%20Repo-Support%20Us-purple?style=for-the-badge&logo=github" alt="Star Repo" />
   </a>
@@ -21,59 +18,59 @@
 
 ## 📖 Project Overview
 
-**AI Study Planner** is a modern full-stack, AI-powered productivity platform designed to help students transform complex, unstructured course syllabi into adaptive, optimized study blueprints. Using state-of-the-art LLMs, the platform identifies chapters, suggests study hour distributions, structures active-recall flashcards/quizzes, and dynamically rebalances study tasks when deadlines are missed.
+**AI Study Planner** is a production-grade adaptive educational platform designed to help students convert unstructured lecture course syllabi into optimized, structured study schedules. The system leverages:
+1. **Deterministic Spaced-Repetition Scheduling:** An algorithmic scheduling core implementing Leitner Box methodologies and topological dependency sorting.
+2. **AI-Assisted Operations:** Generates quiz explanations, interactive flashcards, chatbot tutors, and schedule descriptions.
 
-### 🔄 How It Works
+---
+
+## 🔄 System Architecture & Data Flow
 
 ```mermaid
 graph TD
-    A[📄 Upload Syllabus PDF] --> B[🧠 AI Analyzes Topics & chapters]
-    B --> C[📅 Generate Personalized Study Plan]
-    C --> D[🎯 Track Daily Progress & Checklists]
-    D -->|Missed study block?| E[🔄 AI Auto-Rebalances Remaining Days]
-    E --> C
-    D -->|Exam approach?| F[🎓 Calibrate 'Before Exam' Countdown Mode]
+    subgraph Client [React 19 Frontend SPA]
+        UI[Glassmorphic Dashboard] -->|Optimistic UI Toggles| UI
+        Error[ErrorBoundary React Container] --> UI
+    end
+    subgraph API [Express Backend API]
+        Router[CORS Allowlist & Helmet CSP] -->|AsyncLocalStorage Request Context| Controllers[Controllers]
+        Controllers -->|Zod Startup Checks| EnvConfig[Zod Config Validation]
+        Controllers -->|Secure Cookie Hashed Token Rotation| Auth[Auth Controller]
+        Controllers -->|Synchronous PDF upload extraction| Upload[PDF Upload Controller]
+        Upload -->|Queue jobs| Tasks[In-Memory Queue Service]
+    end
+    subgraph Worker [Standalone Cron Process]
+        Cron[node-cron Engine] -->|Distributed DB Locks| Locks[Lock Schema]
+        Cron -->|Stateful claim| Delivery[NotificationDelivery Schema]
+        Delivery -->|Idempotent mail alert| Mail[SMTP / Winston Logger]
+    end
+    API -->|Mongoose Indexes| DB[(MongoDB database)]
+    Worker -->|Mongoose Indexes| DB
 ```
 
 ---
 
-## 🔐 Demo Credentials
+## 🌟 Key Architecture Subsystems
 
-Skip registration and explore the platform instantly using the credentials below:
+### 1. Deterministic Scheduling Engine
+Unlike unpredictable LLM-generated calendars, this platform implements a fully deterministic scheduler:
+* **Prerequisites Topological Sort:** Analyzes chapter dependencies, ensuring foundational concepts are scheduled before advanced subjects.
+* **Leitner Box Spaced Repetition:** Calibrates daily workloads based on student quiz scores, reducing load for mastered topics (-50% estimated hours) and scaling up for difficult ones (+30%).
+* **Burnout & Break Guardrails:** Automatically schedules break days every 7th day and monitors daily densities.
 
-- **Email**: `demo@example.com`
-- **Password**: `Password123`
+### 2. LLM Boundary & Zod Validation Retries
+* **Structured JSON Mode:** Enforces JSON responses from Groq APIs verified against Zod schemas (with character limits, unique option array lengths, and index ranges).
+* **Agentic Error Feedback Loops:** If a schema validation fails, the validation error is appended to the message history, letting the LLM self-correct on subsequent retries.
+* **Controlled Fallbacks:** Standardizes UI layouts via fallback responses if the retry threshold is exceeded.
 
----
+### 3. Hashed Refresh Token Families
+* **Token Rotation (RTR):** Stores cryptographically hashed SHA-256 signatures of refresh tokens in a dedicated collection.
+* **Theft Replay Lockout:** Generates linked `familyId` token lineages. If a reused refresh token is presented, the entire family is revoked, force-logging out the student.
 
-## 🌟 Key Features
-
-### 1. 🤖 Adaptive AI Schedule Generation & Plan Rebalancing
-* **Syllabus Parser**: Drag & drop a syllabus PDF (up to 10MB). Groq AI extracts chapter titles and schedules study days.
-* **Study Blueprint Explanation**: Each plan generated is backed by a bulleted AI logic card detailing why chapters were mapped to specific dates.
-* **Auto-Rebalancing Engine**: Tutors classify student queries (e.g. *"I missed yesterday's study"*) and automatically shift uncompleted study blocks forward into future days.
-
-### 2. ⚡ AI Active-Recall Flashcards & Self-Testing Quizzes
-* **3D Flip Flashcards**: Generate high-yield study cards for active recall.
-* **Self-Evaluation Quizzes**: Take interactive multiple-choice practice quizzes with step-by-step AI answer explanations.
-
-### 3. 🎙️ Voice-Activated AI Study Chatbot
-* Speak queries hands-free. The tutor responds with academic definitions and embedded YouTube video lectures.
-
-### 4. 🎯 "Before Exam" Countdown Mode
-* Select an exam date and subjects to generate a high-intensity study roadmap block-by-block leading up to test day.
-
-### 5. 📊 Analytics, Streaks & Mastery Logs
-* **AI recommendations**: 3 dynamic performance cards suggesting revision shifts.
-* **Cognitive Safety Meter**: Gauge fatigue indices based on pending tasks and hours.
-
----
-
-## 🛠️ Tech Stack
-
-* **Frontend**: React 19 (Vite), Tailwind CSS (Glassmorphic Theme), Lucide Icons
-* **Backend**: Node.js & Express, MongoDB Atlas & Mongoose, Passport.js (JWT)
-* **AI Model**: Groq SDK (`llama-3.1-8b-instant`)
+### 4. Background Worker & Idempotent Reminders
+* **Graceful Decoupling:** Decouples daily cron checks into a standalone `worker.js` node instance.
+* **Distributed DB Locks:** Leverages a `Lock` schema with MongoDB TTL indexes to ensure only one worker executes reminders.
+* **Recipient Idempotency:** Implements a stateful `NotificationDelivery` claim index matching unique user and calendar day scopes.
 
 ---
 
@@ -83,61 +80,80 @@ Skip registration and explore the platform instantly using the credentials below
 AI-Study-Planner/
 ├── backend/
 │   ├── src/
-│   │   ├── controllers/      # Auth, AI, Subject, Planner, Progress controllers
-│   │   ├── middleware/       # JWT Auth Middleware
-│   │   ├── models/           # Mongoose Schemas (User, Subject, Chapter, StudyPlan)
-│   │   ├── routes/           # REST API Route Definitions
-│   │   └── utils/            # Schedule generation & Email sending utilities
-│   ├── tests/                # Unit test suites (planner.test.js)
-│   └── index.js              # Server entry point
-│
+│   │   ├── config/           # Database connections & Zod startup environment schemas
+│   │   ├── controllers/      # Resource ownership controllers (Auth, AI, Subjects)
+│   │   ├── middleware/       # Rate limiting, Request validation, and custom CORS configurations
+│   │   ├── models/           # Hashed tokens, NotificationClaim, Locks, and database indexes
+│   │   ├── routes/           # REST API routes
+│   │   ├── services/         # Token handling, callLLM retries, and queue services
+│   │   └── utils/            # Winston structured logging, sendEmail, and planner logic
+│   ├── tests/                # Jest & Supertest integration suite (auth, scheduler)
+│   ├── index.js              # API Entrypoint
+│   └── worker.js             # Standalone background cron job worker
 ├── frontend/
 │   ├── src/
-│   │   ├── components/       # Reusable UI components (Logo, Pomodoro, Sidebar)
-│   │   ├── pages/            # Views (Dashboard, CalendarPlanner, StudyTracker, Exams)
-│   │   └── services/         # Centralized API service methods
-│   └── index.html            # Vite HTML entry point
+│   │   ├── components/       # UI Components, page layouts, skeletons, and Error Boundaries
+│   │   ├── context/          # State management (Theme, Auth)
+│   │   └── services/         # Axios interceptors handling token rotation transparently
+│   └── vercel.json           # SPA redirect rules configuration
 ```
 
 ---
 
-## ⚙️ How to Run Locally
+## ⚙️ Running Locally
 
-### 1. Clone Repository
-```bash
-git clone https://github.com/beingUbaid/AI-Study-Planner.git
-cd AI-Study-Planner
-```
-
-### 2. Configure Backend
+### 1. Setup Backend
+Use reproducible `npm ci` commands:
 ```bash
 cd backend
-npm install
+npm ci
 cp .env.example .env
-# Edit .env and supply your MONGO_URI, JWT_SECRET, and GROQ_API_KEY
+# Configure JWT_SECRET (32+ chars), MONGO_URI, and GROQ_API_KEY
 npm run dev
 ```
 
-### 3. Configure Frontend
+To boot the worker in a separate standalone terminal process:
+```bash
+cd backend
+node worker.js
+```
+
+### 2. Setup Frontend
 ```bash
 cd ../frontend
-npm install
+npm ci
 cp .env.example .env
-# Edit .env and point VITE_API_URL to http://localhost:5000/api
+# Verify VITE_API_URL is configured
 npm run dev
 ```
 
 ---
 
-## 🧪 Testing
+## 🧪 Testing Suites
 
-Run backend scheduler unit tests locally:
+Run backend automated Jest and Supertest integration tests:
 ```bash
 cd backend
-node tests/planner.test.js
+npm test
+```
+
+Run frontend Vitest unit tests:
+```bash
+cd frontend
+npm run test
+```
+
+Run Playwright End-to-End browser integration tests:
+```bash
+cd frontend
+npx playwright test
 ```
 
 ---
 
-## 📄 License
-This project is licensed under the **MIT License**.
+## 🐳 Docker Deployment Stack
+
+To spin up the entire production container stack locally (incorporating health checks, alpine environments, and non-root executors):
+```bash
+docker-compose up --build
+```
