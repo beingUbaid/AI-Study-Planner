@@ -39,4 +39,7 @@ const SubjectSchema = new mongoose.Schema({
   }]
 }, { timestamps: true })
 
+SubjectSchema.index({ user: 1, name: 1 }, { unique: true });
+SubjectSchema.index({ user: 1, examDate: 1 });
+
 export default mongoose.models.Subject || mongoose.model("Subject", SubjectSchema);

@@ -6,9 +6,9 @@ import passport from './src/config/passport.js';
 import crypto from 'crypto';
 
 // middlewares
-import { globalLimiter } from './src/middleware/rateLimiter.js';
+import { globalLimiter, apiLimiter } from './src/middleware/rateLimiter.js';
 import { globalErrorHandler } from './src/middleware/errorMiddleware.js';
-import logger from './src/utils/logger.js';
+import logger, { requestStore } from './src/utils/logger.js';
 import AppError from './src/utils/appError.js';
 
 // routes
@@ -36,7 +36,7 @@ app.use(cookieParser());
 // JSON parser with body size limit for DOS protection
 app.use(express.json({ limit: '10kb' }));
 
-// Custom MongoDB input sanitization middleware to prevent NoSQL injection
+// Custom MongoDB input sanitization middleware to prevent NoSQL injection (unnecessary header sanitization removed)
 const sanitizeMongo = (obj) => {
   if (obj && typeof obj === 'object') {
     for (const key in obj) {
@@ -49,22 +49,26 @@ const sanitizeMongo = (obj) => {
   }
 };
 
+// Global AsyncLocalStorage request context manager and Request ID generator
+app.use((req, res, next) => {
+  const requestId = req.headers['x-request-id'] || crypto.randomUUID();
+  req.id = requestId;
+  res.setHeader('X-Request-Id', requestId);
+  
+  const store = { requestId, userId: null };
+  requestStore.run(store, () => {
+    next();
+  });
+});
+
 app.use((req, res, next) => {
   if (req.body) sanitizeMongo(req.body);
   if (req.params) sanitizeMongo(req.params);
   if (req.query) sanitizeMongo(req.query);
-  if (req.headers) sanitizeMongo(req.headers);
   next();
 });
 
-// Custom Request ID middleware
-app.use((req, res, next) => {
-  req.id = req.headers['x-request-id'] || crypto.randomUUID();
-  res.setHeader('X-Request-Id', req.id);
-  next();
-});
-
-// Structured HTTP JSON logging middleware
+// Structured HTTP JSON logging middleware using winston
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
@@ -75,7 +79,6 @@ app.use((req, res, next) => {
       url: req.originalUrl,
       statusCode: res.statusCode,
       durationMs: duration,
-      userId: req.user ? req.user.id : null,
       ip: req.ip
     });
   });
@@ -90,12 +93,12 @@ app.use(passport.initialize());
 
 // all routes
 app.use('/api/auth', authRoutes);
-app.use('/api/subjects', subjectRoutes);
-app.use('/api/planner', plannerRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/progress', progressRoutes);
+app.use('/api/subjects', apiLimiter, subjectRoutes);
+app.use('/api/planner', apiLimiter, plannerRoutes);
+app.use('/api/dashboard', apiLimiter, dashboardRoutes);
+app.use('/api/progress', apiLimiter, progressRoutes);
 app.use('/api/ai', aiRoutes);
-app.use('/api/analytics', analyticsRoutes);
+app.use('/api/analytics', apiLimiter, analyticsRoutes);
 
 // Test route
 app.get('/health', (req, res) => {

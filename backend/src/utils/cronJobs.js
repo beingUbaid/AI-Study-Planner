@@ -3,6 +3,8 @@ import User from '../models/User.js'
 import Subject from '../models/Subject.js'
 import StudyPlan from '../models/StudyPlan.js'
 import sendEmail from './sendEmail.js'
+import Lock from '../models/Lock.js'
+import logger from './logger.js'
 
 export const startCronJobs = () => {
 
@@ -12,7 +14,21 @@ export const startCronJobs = () => {
   // '0 8 * * *' means: minute=0, hour=8, every day
   // ─────────────────────────────────────────
   cron.schedule('0 8 * * *', async () => {
-    console.log('⏰ Running exam reminder cron job...')
+    logger.info('⏰ Running exam reminder cron job...');
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const lockKey = `exam-reminder:${todayStr}`;
+    const durationMs = 60 * 60 * 1000; // 1 hour expiration
+
+    try {
+      // Try to acquire distributed lock for this day
+      const expireAt = new Date(Date.now() + durationMs);
+      await Lock.create({ key: lockKey, expireAt });
+      logger.info(`Lock acquired for ${lockKey}. Executing cron job.`);
+    } catch {
+      logger.info(`Cron job skip: lock for ${lockKey} already held by another worker instance.`);
+      return;
+    }
 
     try {
       // get all verified users
@@ -69,13 +85,13 @@ export const startCronJobs = () => {
           `
         )
 
-        console.log(`✅ Reminder sent to ${user.email}`)
+        logger.info(`✅ Reminder sent to ${user.email}`)
       }
 
     } catch (error) {
-      console.error('Cron job error:', error.message)
+      logger.error('Cron job error:', error.message)
     }
   })
 
-  console.log('✅ Cron jobs started!')
+  logger.info('✅ Cron jobs started!')
 }

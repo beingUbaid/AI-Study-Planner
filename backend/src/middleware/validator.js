@@ -1,5 +1,4 @@
 import { validationResult } from 'express-validator';
-import AppError from '../utils/appError.js';
 
 export const validate = (validations) => {
   return async (req, res, next) => {

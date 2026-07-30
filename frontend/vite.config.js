@@ -18,6 +18,7 @@ export default defineConfig({
     pool: 'forks',
     forks: {
       singleFork: true
-    }
+    },
+    exclude: ['**/node_modules/**', '**/dist/**', '**/tests-e2e/**', '**/e2e/**']
   }
 })

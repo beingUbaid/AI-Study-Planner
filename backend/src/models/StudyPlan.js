@@ -71,4 +71,6 @@ const StudyPlanSchema = new mongoose.Schema({
   }]
 }, { timestamps: true })
 
+StudyPlanSchema.index({ user: 1 }, { unique: true });
+
 export default mongoose.model('StudyPlan', StudyPlanSchema)

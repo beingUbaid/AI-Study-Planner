@@ -35,4 +35,7 @@ const ChapterSchema = new mongoose.Schema({
   }
 }, { timestamps: true })
 
+ChapterSchema.index({ subject: 1, order: 1 });
+ChapterSchema.index({ user: 1 });
+
 export default mongoose.model('Chapter', ChapterSchema)

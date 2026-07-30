@@ -37,7 +37,7 @@ export const register = catchAsync(async (req, res, next) => {
   const verifyCode = generateSecureCode();
   const verifyCodeExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 mins validity
 
-  const user = await User.create({
+  await User.create({
     name,
     email,
     password: hashedPassword,
@@ -182,7 +182,7 @@ export const refreshToken = catchAsync(async (req, res, next) => {
   let decoded;
   try {
     decoded = verifyRefreshToken(token);
-  } catch (err) {
+  } catch {
     // If invalid token, clear cookies anyway to be clean
     clearRefreshTokenCookie(res);
     return next(new AppError('Invalid refresh token.', 401));
@@ -231,7 +231,7 @@ export const logout = catchAsync(async (req, res, next) => {
         user.refreshTokens.pull(token);
         await user.save();
       }
-    } catch (err) {
+    } catch {
       // Ignore token verification errors during logout
     }
   }

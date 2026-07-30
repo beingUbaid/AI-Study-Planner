@@ -9,7 +9,7 @@
     "dev": "nodemon index.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --forceExit",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --forceExit",
-    "lint": "node -e \"console.log('Backend lint checks passed ✅')\""
+    "lint": "eslint ."
   },
   "keywords": [],
   "author": "",
@@ -33,9 +33,12 @@
     "nodemailer": "^9.0.1",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^2.4.5",
+    "winston": "^3.19.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "eslint": "^10.8.0",
     "jest": "^30.4.2",
     "mongodb-memory-server": "^11.2.0",
     "nodemon": "^3.1.14",

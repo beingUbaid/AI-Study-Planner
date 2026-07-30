@@ -114,8 +114,6 @@ describe('SaaS Auth Integration Tests', () => {
     expect(refreshRes.status).toBe(200);
     expect(refreshRes.body.token).toBeTruthy();
     
-    const newCookie = refreshRes.headers['set-cookie'][0];
-    
     // 4. Try refreshing with the OLD cookie (reuse attack detection)
     const reuseRes = await request(app)
       .post('/api/auth/refresh')

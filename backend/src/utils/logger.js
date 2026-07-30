@@ -1,46 +1,42 @@
-const LEVELS = {
-  DEBUG: 0,
-  INFO: 1,
-  WARN: 2,
-  ERROR: 3
-};
+import winston from 'winston';
+import { AsyncLocalStorage } from 'async_hooks';
 
-const CURRENT_LEVEL = process.env.NODE_ENV === 'production' ? LEVELS.INFO : LEVELS.DEBUG;
+// Instantiate AsyncLocalStorage request store for logging request context globally
+export const requestStore = new AsyncLocalStorage();
 
-const formatMessage = (level, message, meta) => {
-  const timestamp = new Date().toISOString();
-  let metaString = '';
-  if (meta) {
-    if (meta instanceof Error) {
-      metaString = ` | Error: ${meta.message} | Stack: ${meta.stack}`;
-    } else {
-      metaString = ` | Meta: ${JSON.stringify(meta)}`;
-    }
+const formatLog = winston.format.printf(({ timestamp, level, message, ...metadata }) => {
+  const store = requestStore.getStore();
+  const requestId = store?.requestId || '';
+  const userId = store?.userId || '';
+
+  // Standardized structured JSON output in production
+  if (process.env.NODE_ENV === 'production') {
+    return JSON.stringify({
+      timestamp,
+      level,
+      message,
+      requestId,
+      userId,
+      ...metadata
+    });
+  } else {
+    // Human-readable trace output in development
+    const metaStr = Object.keys(metadata).length ? ` | Meta: ${JSON.stringify(metadata)}` : '';
+    const reqStr = requestId ? ` [Req: ${requestId}]` : '';
+    const userStr = userId ? ` [User: ${userId}]` : '';
+    return `[${timestamp}] [${level.toUpperCase()}]${reqStr}${userStr} ${message}${metaStr}`;
   }
-  return `[${timestamp}] [${level}] ${message}${metaString}`;
-};
+});
 
-const logger = {
-  debug: (message, meta) => {
-    if (CURRENT_LEVEL <= LEVELS.DEBUG) {
-      console.debug(formatMessage('DEBUG', message, meta));
-    }
-  },
-  info: (message, meta) => {
-    if (CURRENT_LEVEL <= LEVELS.INFO) {
-      console.info(formatMessage('INFO', message, meta));
-    }
-  },
-  warn: (message, meta) => {
-    if (CURRENT_LEVEL <= LEVELS.WARN) {
-      console.warn(formatMessage('WARN', message, meta));
-    }
-  },
-  error: (message, meta) => {
-    if (CURRENT_LEVEL <= LEVELS.ERROR) {
-      console.error(formatMessage('ERROR', message, meta));
-    }
-  }
-};
+const logger = winston.createLogger({
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    formatLog
+  ),
+  transports: [
+    new winston.transports.Console()
+  ]
+});
 
 export default logger;

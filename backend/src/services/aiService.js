@@ -1,23 +1,34 @@
 import Groq from 'groq-sdk';
-import logger from '../utils/logger.js';
+import logger, { requestStore } from '../utils/logger.js';
 import { promptTemplates } from '../utils/promptTemplates.js';
+import { SyllabusSchema, FlashcardSchema, QuizSchema, RoadmapSchema } from '../utils/schemas.js';
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY
 });
 
 const DEFAULT_MODEL = 'llama-3.1-8b-instant';
+const PROMPT_VERSION = '1.0.0';
 
 // Helper to wait for exponential backoff
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Call Groq API with retries, timeouts, latency tracking, and exponential backoff
+const calculateCost = (model, promptTokens, completionTokens) => {
+  // Input: $0.05 / 1M tokens, Output: $0.08 / 1M tokens for Llama 3.1 8b
+  if (model.includes('8b')) {
+    return ((promptTokens * 0.05) + (completionTokens * 0.08)) / 1000000;
+  }
+  return ((promptTokens * 0.59) + (completionTokens * 0.79)) / 1000000;
+};
+
+// Call Groq API with retries, timeouts, latency tracking, Zod schema validation, and exponential backoff
 export const callLLM = async ({
   messages,
   maxTokens = 1000,
   model = DEFAULT_MODEL,
   jsonMode = false,
-  retries = 3
+  retries = 3,
+  schema = null
 }) => {
   let attempt = 0;
   let delay = 1000; // start with 1 second
@@ -35,26 +46,70 @@ export const callLLM = async ({
         options.response_format = { type: 'json_object' };
       }
 
-      logger.info(`Sending request to LLM (Model: ${model}, Attempt: ${attempt + 1})`);
+      const store = requestStore.getStore();
+      const requestId = store?.requestId || 'N/A';
+
+      logger.info('Sending request to LLM (Metadata only logged for privacy)', {
+        model,
+        promptVersion: PROMPT_VERSION,
+        attempt: attempt + 1,
+        requestId,
+        jsonMode
+      });
+
       const start = Date.now();
-      
       // Set a 15-second timeout limit for Groq API calls to avoid server hangs
       const completion = await groq.chat.completions.create(options, { timeout: 15000 });
-      
       const latency = Date.now() - start;
+
+      const rawContent = completion.choices[0].message.content;
       const usage = completion.usage;
       
+      let cost = 0;
       if (usage) {
-        logger.info(`LLM Metrics | Prompt Tokens: ${usage.prompt_tokens} | Completion Tokens: ${usage.completion_tokens} | Total Tokens: ${usage.total_tokens} | Latency: ${latency}ms`);
-      } else {
-        logger.info(`LLM Metrics | Latency: ${latency}ms`);
+        cost = calculateCost(model, usage.prompt_tokens, usage.completion_tokens);
       }
 
-      return completion.choices[0].message.content;
+      logger.info('LLM Response Metrics', {
+        model,
+        promptVersion: PROMPT_VERSION,
+        promptTokens: usage?.prompt_tokens || 0,
+        completionTokens: usage?.completion_tokens || 0,
+        totalTokens: usage?.total_tokens || 0,
+        latencyMs: latency,
+        estimatedCostUSD: cost,
+        requestId
+      });
+
+      // If schema is provided, parse and validate the response
+      if (schema) {
+        let parsedJSON;
+        try {
+          parsedJSON = JSON.parse(rawContent);
+        } catch (jsonErr) {
+          throw new Error(`JSON parsing failed: ${jsonErr.message}`);
+        }
+
+        // Zod validation
+        const validationResult = schema.safeParse(parsedJSON);
+        if (!validationResult.success) {
+          throw new Error(`Schema validation failed: ${validationResult.error.message}`);
+        }
+
+        // Return validated and parsed data
+        return validationResult.data;
+      }
+
+      return rawContent;
 
     } catch (error) {
       attempt++;
-      logger.warn(`LLM request failed (Attempt ${attempt}/${retries}): ${error.message}`);
+      logger.warn('LLM attempt failed, scheduling retry', {
+        attempt,
+        maxRetries: retries,
+        error: error.message,
+        backoffDelayMs: delay
+      });
       
       if (attempt >= retries) {
         throw new Error(`LLM call failed after ${retries} attempts: ${error.message}`);
@@ -115,30 +170,21 @@ export const extractSyllabusChapters = async (pdfText) => {
     }
   ];
 
-  const responseText = await callLLM({
-    messages,
-    maxTokens: 1200,
-    jsonMode: true
-  });
-
-  // Strict JSON parsing and schema validation
   try {
-    const parsed = JSON.parse(responseText);
-    const chapters = Array.isArray(parsed) ? parsed : (parsed.chapters || []);
-    
-    // Schema verification
-    return chapters.map((ch, index) => {
-      if (!ch.name || typeof ch.name !== 'string') {
-        throw new Error('Invalid chapter structure: name missing or not a string');
-      }
-      return {
-        name: ch.name.trim(),
-        estimatedHours: Number(ch.estimatedHours) || 1,
-        order: index + 1
-      };
+    const chapters = await callLLM({
+      messages,
+      maxTokens: 1200,
+      jsonMode: true,
+      schema: SyllabusSchema
     });
+
+    return chapters.map((ch, index) => ({
+      name: ch.name.trim(),
+      estimatedHours: ch.estimatedHours,
+      order: index + 1
+    }));
   } catch (error) {
-    logger.error('Failed to parse or validate extracted syllabus JSON schema', { responseText, error: error.message });
+    logger.error('Failed to generate validated chapters, using fallback', { error: error.message });
     throw new Error('AI extraction returned invalid syllabus format. Please try a clearer document.');
   }
 };
@@ -156,23 +202,21 @@ export const generateFlashcards = async (subject, topic, count) => {
     }
   ];
 
-  const responseText = await callLLM({
-    messages,
-    maxTokens: 1200,
-    jsonMode: true
-  });
-
   try {
-    const parsed = JSON.parse(responseText);
-    const cards = Array.isArray(parsed) ? parsed : (parsed.flashcards || []);
-    
+    const cards = await callLLM({
+      messages,
+      maxTokens: 1200,
+      jsonMode: true,
+      schema: FlashcardSchema
+    });
+
     return cards.map(c => ({
-      front: c.front || 'Empty Question',
-      back: c.back || 'Empty Answer',
+      front: c.front,
+      back: c.back,
       category: c.category || subject
     }));
   } catch (error) {
-    logger.error('Failed to parse generated flashcards JSON', { responseText, error: error.message });
+    logger.error('Failed to generate validated flashcards, using fallback', { error: error.message });
     // Safe Fallback
     return Array.from({ length: count }, (_, i) => ({
       front: `Key concept ${i + 1} regarding ${topic}?`,
@@ -195,31 +239,22 @@ export const generateQuiz = async (subject, topic, difficulty, count) => {
     }
   ];
 
-  const responseText = await callLLM({
-    messages,
-    maxTokens: 1500,
-    jsonMode: true
-  });
-
   try {
-    const parsed = JSON.parse(responseText);
-    const questions = Array.isArray(parsed) ? parsed : (parsed.quiz || parsed.questions || []);
-
-    return questions.map(q => {
-      const options = Array.isArray(q.options) && q.options.length >= 2 ? q.options : ['Option A', 'Option B', 'Option C', 'Option D'];
-      let correctAnswer = Number(q.correctAnswer);
-      if (isNaN(correctAnswer) || correctAnswer < 0 || correctAnswer >= options.length) {
-        correctAnswer = 0;
-      }
-      return {
-        question: q.question || 'Review Question',
-        options,
-        correctAnswer,
-        explanation: q.explanation || 'Consult material for detailed answers.'
-      };
+    const questions = await callLLM({
+      messages,
+      maxTokens: 1500,
+      jsonMode: true,
+      schema: QuizSchema
     });
+
+    return questions.map(q => ({
+      question: q.question,
+      options: q.options,
+      correctAnswer: q.correctAnswer,
+      explanation: q.explanation || ''
+    }));
   } catch (error) {
-    logger.error('Failed to parse generated quiz JSON', { responseText, error: error.message });
+    logger.error('Failed to generate validated quiz, using fallback', { error: error.message });
     // Safe Fallback
     return [
       {
@@ -252,17 +287,17 @@ export const generateExamModeRoadmap = async (examDate, subjects, currentPrep, t
     }
   ];
 
-  const responseText = await callLLM({
-    messages,
-    maxTokens: 1000,
-    jsonMode: true
-  });
-
   try {
-    const parsed = JSON.parse(responseText);
-    return Array.isArray(parsed) ? parsed : (parsed.roadmap || parsed.steps || []);
+    const steps = await callLLM({
+      messages,
+      maxTokens: 1000,
+      jsonMode: true,
+      schema: RoadmapSchema
+    });
+
+    return steps;
   } catch (error) {
-    logger.error('Failed to parse exam mode countdown JSON', { responseText, error: error.message });
+    logger.error('Failed to generate validated exam mode roadmap, using fallback', { error: error.message });
     return [
       {
         days: 'Phase 1',
