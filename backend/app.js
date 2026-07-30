@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import passport from './src/config/passport.js';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
+import { env } from './src/config/env.js';
 
 // middlewares
 import { globalLimiter, apiLimiter } from './src/middleware/rateLimiter.js';
@@ -22,19 +24,40 @@ import analyticsRoutes from './src/routes/analytics.js';
 
 const app = express();
 
-// Security headers
-app.use(helmet());
+// Security headers with strict CSP configuration
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https://api.groq.com"]
+    }
+  }
+}));
 
-// CORS setup
+// Whitelisted CORS setup (supports credentials securely for verified domains only)
+const allowedOrigins = env.ALLOWED_ORIGINS 
+  ? env.ALLOWED_ORIGINS.split(',').map(o => o.trim()) 
+  : [env.CLIENT_URL];
+
 app.use(cors({
-  origin: process.env.CLIENT_URL,
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 
 app.use(cookieParser());
 
-// JSON parser with body size limit for DOS protection
+// Payload parsers with body size limits for DOS protection
 app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ limit: '10kb', extended: true }));
 
 // Custom MongoDB input sanitization middleware to prevent NoSQL injection (unnecessary header sanitization removed)
 const sanitizeMongo = (obj) => {
@@ -49,9 +72,15 @@ const sanitizeMongo = (obj) => {
   }
 };
 
-// Global AsyncLocalStorage request context manager and Request ID generator
+// Global AsyncLocalStorage request context manager and Request ID validator
 app.use((req, res, next) => {
-  const requestId = req.headers['x-request-id'] || crypto.randomUUID();
+  const incomingId = req.headers['x-request-id'];
+  const uuidRegex = /^[a-zA-Z0-9-]{1,36}$/;
+  // Validate incoming ID format/length or generate a fresh secure one
+  const requestId = (incomingId && uuidRegex.test(incomingId))
+    ? incomingId
+    : crypto.randomUUID();
+
   req.id = requestId;
   res.setHeader('X-Request-Id', requestId);
   
@@ -100,9 +129,22 @@ app.use('/api/progress', apiLimiter, progressRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/analytics', apiLimiter, analyticsRoutes);
 
-// Test route
+// Readiness, health and version endpoints
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+  res.status(200).json({ status: 'UP', timestamp: new Date().toISOString() });
+});
+
+app.get('/ready', async (req, res) => {
+  const dbState = mongoose.connection.readyState;
+  if (dbState === 1) {
+    return res.status(200).json({ status: 'READY', database: 'connected' });
+  } else {
+    return res.status(503).json({ status: 'NOT_READY', database: 'disconnected' });
+  }
+});
+
+app.get('/version', (req, res) => {
+  res.status(200).json({ version: process.env.APP_VERSION || '1.0.0' });
 });
 
 // Standardized 404 handler for unmatched routes

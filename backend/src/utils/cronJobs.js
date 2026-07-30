@@ -1,10 +1,11 @@
-import cron from 'node-cron'
-import User from '../models/User.js'
-import Subject from '../models/Subject.js'
-import StudyPlan from '../models/StudyPlan.js'
-import sendEmail from './sendEmail.js'
-import Lock from '../models/Lock.js'
-import logger from './logger.js'
+import cron from 'node-cron';
+import User from '../models/User.js';
+import Subject from '../models/Subject.js';
+import StudyPlan from '../models/StudyPlan.js';
+import sendEmail from './sendEmail.js';
+import Lock from '../models/Lock.js';
+import ReminderLog from '../models/ReminderLog.js';
+import logger from './logger.js';
 
 export const startCronJobs = () => {
 
@@ -13,7 +14,7 @@ export const startCronJobs = () => {
   // Runs every day at 8:00 AM
   // '0 8 * * *' means: minute=0, hour=8, every day
   // ─────────────────────────────────────────
-  cron.schedule('0 8 * * *', async () => {
+  const reminderJob = cron.schedule('0 8 * * *', async () => {
     logger.info('⏰ Running exam reminder cron job...');
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -32,66 +33,99 @@ export const startCronJobs = () => {
 
     try {
       // get all verified users
-      const users = await User.find({ isVerified: true })
+      const users = await User.find({ isVerified: true });
 
       for (const user of users) {
-        // get their subjects with exams in next 3 days
-        const now = new Date()
-        const threeDaysLater = new Date()
-        threeDaysLater.setDate(threeDaysLater.getDate() + 3)
+        try {
+          // get their subjects with exams in next 3 days
+          const now = new Date();
+          const threeDaysLater = new Date();
+          threeDaysLater.setDate(threeDaysLater.getDate() + 3);
 
-        const urgentSubjects = await Subject.find({
-          user: user._id,
-          examDate: { $gte: now, $lte: threeDaysLater }
-        })
+          const urgentSubjects = await Subject.find({
+            user: user._id,
+            examDate: { $gte: now, $lte: threeDaysLater }
+          });
 
-        if (urgentSubjects.length === 0) continue
+          if (urgentSubjects.length === 0) {
+            continue;
+          }
 
-        // get their pending tasks
-        const studyPlan = await StudyPlan.findOne({ user: user._id })
-        let pendingCount = 0
+          // Atomically check or claim the reminder task for this user today
+          let logRecord;
+          try {
+            logRecord = await ReminderLog.create({
+              userId: user._id,
+              sentDate: todayStr,
+              status: 'claimed',
+              attempts: 1
+            });
+          } catch {
+            // Already sent or claimed
+            logger.info(`Reminder already processed/claimed for user on ${todayStr}`);
+            continue;
+          }
 
-        if (studyPlan) {
-          const allTasks = studyPlan.schedule.flatMap(d => d.tasks)
-          pendingCount = allTasks.filter(t => !t.isCompleted).length
-        }
+          try {
+            // get their pending tasks
+            const studyPlan = await StudyPlan.findOne({ user: user._id });
+            let pendingCount = 0;
 
-        // build email content
-        const subjectList = urgentSubjects.map(s => {
-          const daysLeft = Math.ceil(
-            (new Date(s.examDate) - now) / (1000 * 60 * 60 * 24)
-          )
-          return `<li><strong>${s.name}</strong> — in ${daysLeft} day${daysLeft === 1 ? '' : 's'}</li>`
-        }).join('')
-
-        // send reminder email
-        await sendEmail(
-          user.email,
-          '⚠️ Exam Reminder — AI Study Planner',
-          `
-            <h2>Hello ${user.name}! 👋</h2>
-            <p>You have upcoming exams very soon:</p>
-            <ul>${subjectList}</ul>
-            ${pendingCount > 0
-              ? `<p>You still have <strong>${pendingCount} pending tasks</strong>. Don't wait! 💪</p>`
-              : '<p>Great job! All tasks completed! 🎉</p>'
+            if (studyPlan) {
+              const allTasks = studyPlan.schedule.flatMap(d => d.tasks);
+              pendingCount = allTasks.filter(t => !t.isCompleted).length;
             }
-            <p>Log in now and keep studying!</p>
-            <a href="${process.env.CLIENT_URL}" 
-               style="background:#667eea; color:white; padding:12px 24px; 
-                      border-radius:8px; text-decoration:none;">
-              Study Now 🚀
-            </a>
-          `
-        )
 
-        logger.info(`✅ Reminder sent to ${user.email}`)
+            // build email content
+            const subjectList = urgentSubjects.map(s => {
+              const daysLeft = Math.ceil(
+                (new Date(s.examDate) - now) / (1000 * 60 * 60 * 24)
+              );
+              return `<li><strong>${s.name}</strong> — in ${daysLeft} day${daysLeft === 1 ? '' : 's'}</li>`;
+            }).join('');
+
+            // send reminder email
+            await sendEmail(
+              user.email,
+              '⚠️ Exam Reminder — AI Study Planner',
+              `
+                <h2>Hello ${user.name}! 👋</h2>
+                <p>You have upcoming exams very soon:</p>
+                <ul>${subjectList}</ul>
+                ${pendingCount > 0
+                  ? `<p>You still have <strong>${pendingCount} pending tasks</strong>. Don't wait! 💪</p>`
+                  : '<p>Great job! All tasks completed! 🎉</p>'
+                }
+                <p>Log in now and keep studying!</p>
+                <a href="${process.env.CLIENT_URL}" 
+                   style="background:#667eea; color:white; padding:12px 24px; 
+                          border-radius:8px; text-decoration:none;">
+                  Study Now 🚀
+                </a>
+              `
+            );
+
+            logRecord.status = 'success';
+            await logRecord.save();
+            logger.info('Daily exam reminder email sent and recorded successfully');
+          } catch (sendErr) {
+            logRecord.status = 'failed';
+            logRecord.error = sendErr.message;
+            logRecord.attempts += 1;
+            await logRecord.save();
+            logger.error(`Failed sending daily reminder email: ${sendErr.message}`);
+          }
+
+        } catch (innerUserErr) {
+          logger.error(`Error processing reminder loop for single user: ${innerUserErr.message}`);
+        }
       }
 
     } catch (error) {
-      logger.error('Cron job error:', error.message)
+      logger.error('Cron job reminder execution error:', { error: error.message });
     }
-  })
+  });
 
-  logger.info('✅ Cron jobs started!')
-}
+  logger.info('✅ Cron jobs started!');
+  return [reminderJob];
+};

@@ -3,11 +3,7 @@ import Chapter from '../models/Chapter.js'
 import StudyPlan from '../models/StudyPlan.js'
 import { generateSchedule, detectBurnout } from '../utils/plannerLogic.js'
 import { rebalanceStudyPlan } from '../utils/rebalanceHelper.js'
-import Groq from 'groq-sdk'
-
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY
-})
+import { callLLM } from '../services/aiService.js'
 
 // ─────────────────────────────────────────
 // ADD CHAPTERS TO A SUBJECT
@@ -133,31 +129,32 @@ export const generatePlan = async (req, res) => {
         return `${s.name} (exam in ${daysLeft} days)`
       }).join(', ')
 
-      const completion = await groq.chat.completions.create({
-        model: 'llama-3.1-8b-instant',
-        messages: [
-          {
-            role: 'system',
-            content: `You are an expert academic advisor and AI Study Planner.
-            The student has generated a study schedule. Analyze their subject priority and explain why this plan is optimized for them.
-            
-            Subjects: ${subjectContext}
-            Daily Study Hours: ${dailyStudyHours} hours/day.
-            Total Days of generated schedule: ${schedule.length} days.
-            
-            Generate a short, bullet-point explanation (maximum 4 points) of why this plan was structured this way:
-            - Highlight why certain subjects are prioritized (e.g. exams coming up sooner).
-            - Highlight study time distribution based on difficulty or progress.
-            - Mention that revision days have been strategically added.
-            - Keep it encouraging, professional, and clear.
-            - Return clean markdown format. Do NOT include any markdown code blocks or wrapper tags around it, just the raw text.`
-          }
-        ],
-        max_tokens: 400
+      const messages = [
+        {
+          role: 'system',
+          content: `You are an expert academic advisor and AI Study Planner.
+          The student has generated a study schedule. Analyze their subject priority and explain why this plan is optimized for them.
+          
+          Subjects: ${subjectContext}
+          Daily Study Hours: ${dailyStudyHours} hours/day.
+          Total Days of generated schedule: ${schedule.length} days.
+          
+          Generate a short, bullet-point explanation (maximum 4 points) of why this plan was structured this way:
+          - Highlight why certain subjects are prioritized (e.g. exams coming up sooner).
+          - Highlight study time distribution based on difficulty or progress.
+          - Mention that revision days have been strategically added.
+          - Keep it encouraging, professional, and clear.
+          - Return clean markdown format. Do NOT include any markdown code blocks or wrapper tags around it, just the raw text.`
+        }
+      ]
+
+      aiExplanation = await callLLM({
+        messages,
+        maxTokens: 400
       })
-      aiExplanation = completion.choices[0].message.content.trim()
+      aiExplanation = aiExplanation.trim()
     } catch (err) {
-      console.error('Groq AI Explanation failed, using fallback:', err.message)
+      console.error('Centralized AI Explanation failed, using fallback:', err.message)
       aiExplanation = `Plan optimized successfully. Priority given to subjects with closer exam dates. Daily study hours capped at ${dailyStudyHours} hours to prevent burnout, with revision buffers added before exams.`
     }
 
@@ -362,29 +359,30 @@ export const rebalancePlan = async (req, res) => {
     try {
       const missedDetails = missedTasks.map(t => `- ${t.subjectName}: ${t.chapterName}`).join('\n')
 
-      const completion = await groq.chat.completions.create({
-        model: 'llama-3.1-8b-instant',
-        messages: [
-          {
-            role: 'system',
-            content: `You are an expert AI Study Assistant.
-            The student has missed study sessions and the system has dynamically redistributed their unfinished tasks.
-            Explain the updates to their study plan clearly, directly, and encouragingly.
-            
-            Missed tasks that were rescheduled:
-            ${missedDetails}
-            
-            Daily study hour limit: ${studyPlan.dailyStudyHours} hours.
-            
-            Formulate a friendly response explaining what changes were made (e.g., "I shifted your unfinished Physics session into tomorrow's schedule without increasing your study workload past the ${studyPlan.dailyStudyHours}-hour daily limit.").
-            Ensure the response is extremely human, brief, direct, and encouraging. Do NOT include markdown code blocks or wrapping tags.`
-          }
-        ],
-        max_tokens: 250
+      const messages = [
+        {
+          role: 'system',
+          content: `You are an expert AI Study Assistant.
+          The student has missed study sessions and the system has dynamically redistributed their unfinished tasks.
+          Explain the updates to their study plan clearly, directly, and encouragingly.
+          
+          Missed tasks that were rescheduled:
+          ${missedDetails}
+          
+          Daily study hour limit: ${studyPlan.dailyStudyHours} hours.
+          
+          Formulate a friendly response explaining what changes were made (e.g., "I shifted your unfinished Physics session into tomorrow's schedule without increasing your study workload past the ${studyPlan.dailyStudyHours}-hour daily limit.").
+          Ensure the response is extremely human, brief, direct, and encouraging. Do NOT include markdown code blocks or wrapping tags.`
+        }
+      ]
+
+      explanation = await callLLM({
+        messages,
+        maxTokens: 250
       })
-      explanation = completion.choices[0].message.content.trim()
+      explanation = explanation.trim()
     } catch (err) {
-      console.error('Groq Rebalance Explanation failed, using fallback:', err.message)
+      console.error('Centralized Rebalance Explanation failed, using fallback:', err.message)
       explanation = `Your plan has been updated! I redistributed ${rescheduledCount} unfinished task(s) across the upcoming days without increasing your study workload past the ${studyPlan.dailyStudyHours} hours/day limit.`
     }
 

@@ -12,6 +12,7 @@ import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import app from '../app.js';
 import User from '../src/models/User.js';
+import RefreshToken from '../src/models/RefreshToken.js';
 
 let mongoServer;
 
@@ -87,7 +88,9 @@ describe('SaaS Auth Integration Tests', () => {
 
     const updatedUser = await User.findOne({ email: registerPayload.email });
     expect(updatedUser.isVerified).toBe(true);
-    expect(updatedUser.refreshTokens.length).toBe(1);
+    
+    const refreshTokensCount = await RefreshToken.countDocuments({ user: updatedUser._id });
+    expect(refreshTokensCount).toBe(1);
   });
 
   test('should rotate refresh token and revoke all if reuse is detected', async () => {
@@ -121,9 +124,10 @@ describe('SaaS Auth Integration Tests', () => {
 
     expect(reuseRes.status).toBe(401);
     
-    // All tokens must be revoked
+    // All tokens in the family must be flagged as revoked on reuse detection
     const finalUser = await User.findOne({ email: registerPayload.email });
-    expect(finalUser.refreshTokens.length).toBe(0);
+    const activeTokensCount = await RefreshToken.countDocuments({ user: finalUser._id, isRevoked: false });
+    expect(activeTokensCount).toBe(0);
   });
 
   test('should lock out account after 5 failed login attempts', async () => {

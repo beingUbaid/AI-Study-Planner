@@ -2,6 +2,7 @@ import fs from 'fs';
 import Subject from '../models/Subject.js';
 import Chapter from '../models/Chapter.js';
 import StudyPlan from '../models/StudyPlan.js';
+import logger from '../utils/logger.js';
 import Job from '../models/Job.js';
 import queueService from '../services/queueService.js';
 import * as aiService from '../services/aiService.js';
@@ -143,63 +144,69 @@ export const uploadPDF = catchAsync(async (req, res, next) => {
   });
 
   if (!subject) {
-    // Delete file if subject doesn't exist
     if (fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
     return next(new AppError('Subject not found', 404));
   }
 
+  let pdfText = '';
+  try {
+    // Limit uploaded file size to 5MB
+    if (req.file.size > 5 * 1024 * 1024) {
+      return next(new AppError('PDF exceeds 5MB size limit.', 400));
+    }
+
+    // Extract text from document
+    pdfText = await extractTextFromPDF(req.file.path);
+    if (!pdfText || pdfText.trim().length === 0) {
+      return next(new AppError('Syllabus file content appears empty or unreadable.', 400));
+    }
+
+    // Extracted text length limit (max 50,000 characters)
+    if (pdfText.length > 50000) {
+      return next(new AppError('Syllabus content exceeds the limit of 50,000 characters.', 400));
+    }
+  } catch (err) {
+    logger.error('Failed to parse uploaded PDF:', err);
+    return next(new AppError('Failed to parse uploaded PDF document.', 400));
+  } finally {
+    // Guaranteed cleanup of temp files in finally blocks
+    if (fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+  }
+
   // Create a background job for parsing syllabus
   const job = await queueService.createJob(req.user.id, 'syllabus_extraction');
 
-  // Enqueue job asynchronously
+  // Enqueue job asynchronously (closure captures pdfText safely)
   queueService.enqueue(job._id, async (updateProgress) => {
-    try {
-      await updateProgress(20);
-      const pdfText = await extractTextFromPDF(req.file.path);
+    await updateProgress(30);
+    const chapters = await aiService.extractSyllabusChapters(pdfText);
 
-      await updateProgress(40);
-      if (!pdfText || pdfText.trim().length === 0) {
-        throw new Error('Syllabus file content appears to be empty or unreadable.');
-      }
+    await updateProgress(60);
+    // Delete old chapters and save new ones
+    await Chapter.deleteMany({ subject: subjectId, user: req.user.id });
 
-      await updateProgress(60);
-      const chapters = await aiService.extractSyllabusChapters(pdfText);
+    const chapterDocs = chapters.map((ch, index) => ({
+      user: req.user.id,
+      subject: subjectId,
+      name: ch.name,
+      estimatedHours: ch.estimatedHours,
+      order: index + 1
+    }));
 
-      await updateProgress(80);
-      // Delete old chapters and save new ones
-      await Chapter.deleteMany({ subject: subjectId, user: req.user.id });
+    await updateProgress(80);
+    const savedChapters = await Chapter.insertMany(chapterDocs);
+    
+    subject.totalChapters = savedChapters.length;
+    await subject.save();
 
-      const chapterDocs = chapters.map((ch, index) => ({
-        user: req.user.id,
-        subject: subjectId,
-        name: ch.name,
-        estimatedHours: ch.estimatedHours,
-        order: index + 1
-      }));
-
-      const savedChapters = await Chapter.insertMany(chapterDocs);
-      
-      subject.totalChapters = savedChapters.length;
-      await subject.save();
-
-      // Delete the file from local uploads storage
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-
-      return {
-        subjectId,
-        chaptersCount: savedChapters.length
-      };
-
-    } catch (err) {
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-      throw err;
-    }
+    return {
+      subjectId,
+      chaptersCount: savedChapters.length
+    };
   });
 
   res.status(202).json({
@@ -214,6 +221,14 @@ export const uploadPDF = catchAsync(async (req, res, next) => {
 // ─────────────────────────────────────────
 export const aiGenerateFlashcards = catchAsync(async (req, res, next) => {
   const { subject = 'General', topic = 'Core Concepts', count = 5 } = req.body;
+
+  // Verify resource ownership if subject is specified
+  if (subject !== 'General') {
+    const ownedSubject = await Subject.findOne({ name: subject, user: req.user.id });
+    if (!ownedSubject) {
+      return next(new AppError('Subject not found or access denied.', 403));
+    }
+  }
 
   const flashcards = await aiService.generateFlashcards(subject, topic, count);
 
@@ -231,6 +246,14 @@ export const aiGenerateFlashcards = catchAsync(async (req, res, next) => {
 // ─────────────────────────────────────────
 export const aiGenerateQuiz = catchAsync(async (req, res, next) => {
   const { subject = 'General', topic = 'Core Concepts', difficulty = 'Medium', count = 4 } = req.body;
+
+  // Verify resource ownership if subject is specified
+  if (subject !== 'General') {
+    const ownedSubject = await Subject.findOne({ name: subject, user: req.user.id });
+    if (!ownedSubject) {
+      return next(new AppError('Subject not found or access denied.', 403));
+    }
+  }
 
   const quiz = await aiService.generateQuiz(subject, topic, difficulty, count);
 

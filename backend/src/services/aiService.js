@@ -2,23 +2,22 @@ import Groq from 'groq-sdk';
 import logger, { requestStore } from '../utils/logger.js';
 import { promptTemplates } from '../utils/promptTemplates.js';
 import { SyllabusSchema, FlashcardSchema, QuizSchema, RoadmapSchema } from '../utils/schemas.js';
+import { env as appEnv } from '../config/env.js';
 
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY
+  apiKey: appEnv.GROQ_API_KEY
 });
 
-const DEFAULT_MODEL = 'llama-3.1-8b-instant';
+const DEFAULT_MODEL = appEnv.AI_MODEL;
 const PROMPT_VERSION = '1.0.0';
 
 // Helper to wait for exponential backoff
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const calculateCost = (model, promptTokens, completionTokens) => {
-  // Input: $0.05 / 1M tokens, Output: $0.08 / 1M tokens for Llama 3.1 8b
-  if (model.includes('8b')) {
-    return ((promptTokens * 0.05) + (completionTokens * 0.08)) / 1000000;
-  }
-  return ((promptTokens * 0.59) + (completionTokens * 0.79)) / 1000000;
+  const inputCost = appEnv.AI_INPUT_COST_1M;
+  const outputCost = appEnv.AI_OUTPUT_COST_1M;
+  return ((promptTokens * inputCost) + (completionTokens * outputCost)) / 1000000;
 };
 
 // Call Groq API with retries, timeouts, latency tracking, Zod schema validation, and exponential backoff

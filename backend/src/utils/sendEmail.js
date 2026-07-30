@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import logger from './logger.js'
 
 const sendEmail = async (to, subject, html) => {
   try {
@@ -10,7 +11,6 @@ const sendEmail = async (to, subject, html) => {
       }
     })
 
-    
     await transporter.sendMail({
       from: `"AI Study Planner" <${process.env.EMAIL_USER}>`,
       to,
@@ -18,9 +18,9 @@ const sendEmail = async (to, subject, html) => {
       html
     })
 
-    console.log(`Email sent to ${to} ✅`)
+    logger.info('Email notification sent successfully ✅')
   } catch (error) {
-    console.error('Email sending failed ❌', error.message)
+    logger.error('Email sending failed ❌', { error: error.message })
   }
 }
 

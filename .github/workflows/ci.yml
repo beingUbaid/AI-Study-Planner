@@ -1,4 +1,4 @@
-name: CI/CD Production Build & Test Pipeline
+name: CI
 
 on:
   push:
@@ -7,8 +7,16 @@ on:
     branches: [ main, master ]
 
 jobs:
-  backend-ci:
+  ci-pipeline:
     runs-on: ubuntu-latest
+
+    # Setup local services (MongoDB) for integration testing
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -17,9 +25,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
 
+      # ── BACKEND CHECKS ──
       - name: Install Backend Dependencies
         run: |
           cd backend
@@ -35,23 +42,14 @@ jobs:
           cd backend
           npm run test:coverage
         env:
-          JWT_SECRET: ci_test_secret_key_12345
-          JWT_REFRESH_SECRET: ci_test_refresh_secret_key_54321
-          MONGOMS_DISABLE_POSTINSTALL: 0
+          MONGO_URI: mongodb://localhost:27017/ai-study-planner-tests
+          JWT_SECRET: ci_test_secret_key_32_characters_long_minimum
+          JWT_REFRESH_SECRET: ci_test_refresh_secret_key_32_characters_long_minimum
+          GROQ_API_KEY: gsk_fake_key_for_testing_purposes
+          CLIENT_URL: http://localhost:5173
+          NODE_ENV: test
 
-  frontend-ci:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
+      # ── FRONTEND CHECKS ──
       - name: Install Frontend Dependencies
         run: |
           cd frontend
@@ -73,3 +71,59 @@ jobs:
           npm run build
         env:
           VITE_API_URL: /api
+
+      # ── PLAYWRIGHT E2E TESTS ──
+      - name: Install Playwright Browsers
+        run: |
+          cd frontend
+          npx playwright install --with-deps chromium
+
+      - name: Start Backend Service in Background
+        run: |
+          cd backend
+          npm run dev &
+        env:
+          PORT: 5000
+          MONGO_URI: mongodb://localhost:27017/ai-study-planner-tests
+          JWT_SECRET: ci_test_secret_key_32_characters_long_minimum
+          JWT_REFRESH_SECRET: ci_test_refresh_secret_key_32_characters_long_minimum
+          GROQ_API_KEY: gsk_fake_key_for_testing_purposes
+          CLIENT_URL: http://localhost:5173
+          NODE_ENV: development
+          ALLOWED_ORIGINS: http://localhost:5173
+
+      - name: Start Frontend Service in Background
+        run: |
+          cd frontend
+          npm run dev &
+        env:
+          VITE_API_URL: http://localhost:5000/api
+
+      - name: Wait for API and Frontend Health Checks
+        run: |
+          echo "Waiting for services to boot..."
+          for i in {1..30}; do
+            if wget --quiet --spider http://localhost:5000/health && wget --quiet --spider http://localhost:5173; then
+              echo "Services are healthy and ready! ✅"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Timeout waiting for services! ❌"
+          exit 1
+
+      - name: Run Playwright E2E Tests
+        run: |
+          cd frontend
+          npx playwright test
+        env:
+          VITE_API_URL: http://localhost:5000/api
+
+      # Upload screenshots/videos/traces on test failure
+      - name: Upload Test Report Artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: frontend/test-results/
+          if-no-files-found: ignore

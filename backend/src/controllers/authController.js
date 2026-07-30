@@ -9,8 +9,10 @@ import {
   generateRefreshToken,
   sendRefreshTokenCookie,
   clearRefreshTokenCookie,
-  verifyRefreshToken
+  verifyRefreshToken,
+  hashToken
 } from '../services/tokenService.js';
+import RefreshToken from '../models/RefreshToken.js';
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_TIME = 30 * 60 * 1000; // 30 minutes in milliseconds
@@ -92,12 +94,19 @@ export const verifyEmail = catchAsync(async (req, res, next) => {
   user.isVerified = true;
   user.verifyCode = null;
   user.verifyCodeExpiry = null;
+  await user.save();
 
   const accessToken = generateAccessToken(user._id);
-  const newRefreshToken = generateRefreshToken(user._id);
+  const familyId = crypto.randomUUID();
+  const newRefreshToken = generateRefreshToken(user._id, familyId);
+  const tokenHash = hashToken(newRefreshToken);
 
-  user.refreshTokens = [newRefreshToken];
-  await user.save();
+  await RefreshToken.create({
+    user: user._id,
+    tokenHash,
+    familyId,
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  });
 
   sendRefreshTokenCookie(res, newRefreshToken);
 
@@ -144,20 +153,19 @@ export const login = catchAsync(async (req, res, next) => {
   // Reset lockouts on successful login
   user.loginAttempts = 0;
   user.lockUntil = null;
+  await user.save();
 
   const accessToken = generateAccessToken(user._id);
-  const newRefreshToken = generateRefreshToken(user._id);
+  const familyId = crypto.randomUUID();
+  const newRefreshToken = generateRefreshToken(user._id, familyId);
+  const tokenHash = hashToken(newRefreshToken);
 
-  // Rotate/Store Refresh Tokens (support multi-device by cleaning old tokens and pushing new)
-  user.refreshTokens = user.refreshTokens || [];
-  user.refreshTokens.push(newRefreshToken);
-
-  // Keep max 5 active refresh tokens to prevent token bloat
-  if (user.refreshTokens.length > 5) {
-    user.refreshTokens.shift();
-  }
-
-  await user.save();
+  await RefreshToken.create({
+    user: user._id,
+    tokenHash,
+    familyId,
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  });
 
   sendRefreshTokenCookie(res, newRefreshToken);
 
@@ -178,36 +186,41 @@ export const refreshToken = catchAsync(async (req, res, next) => {
     return next(new AppError('No refresh token provided.', 401));
   }
 
-  // Clear cookie and verify token
   let decoded;
   try {
     decoded = verifyRefreshToken(token);
   } catch {
-    // If invalid token, clear cookies anyway to be clean
     clearRefreshTokenCookie(res);
     return next(new AppError('Invalid refresh token.', 401));
   }
 
-  const user = await User.findById(decoded.id);
-  if (!user || !user.refreshTokens.includes(token)) {
-    // Possible token reuse attack or invalid user
-    if (user) {
-      // Revoke all tokens if we suspect token reuse
-      user.refreshTokens = [];
-      await user.save();
+  const incomingHash = hashToken(token);
+  const storedToken = await RefreshToken.findOne({ tokenHash: incomingHash });
+
+  // Reuse detection: if storedToken doesn't exist OR it is already flagged as revoked
+  if (!storedToken || storedToken.isRevoked) {
+    if (decoded.familyId) {
+      await RefreshToken.updateMany({ familyId: decoded.familyId }, { isRevoked: true });
     }
     clearRefreshTokenCookie(res);
-    return next(new AppError('Session expired or security violation detected.', 401));
+    return next(new AppError('Refresh token reuse detected. Revoking session lineage.', 401));
   }
 
-  // Rotate token: remove old one, generate new one
-  user.refreshTokens.pull(token);
+  // Old token is now revoked
+  storedToken.isRevoked = true;
+  await storedToken.save();
 
-  const newAccessToken = generateAccessToken(user._id);
-  const newRefreshToken = generateRefreshToken(user._id);
+  // Generate new refresh token in the same family
+  const newAccessToken = generateAccessToken(decoded.id);
+  const newRefreshToken = generateRefreshToken(decoded.id, decoded.familyId);
+  const newHash = hashToken(newRefreshToken);
 
-  user.refreshTokens.push(newRefreshToken);
-  await user.save();
+  await RefreshToken.create({
+    user: decoded.id,
+    tokenHash: newHash,
+    familyId: decoded.familyId,
+    expiresAt: storedToken.expiresAt
+  });
 
   sendRefreshTokenCookie(res, newRefreshToken);
 
@@ -223,13 +236,10 @@ export const refreshToken = catchAsync(async (req, res, next) => {
 export const logout = catchAsync(async (req, res, next) => {
   const token = req.cookies.refreshToken;
   if (token) {
-    let decoded;
     try {
-      decoded = verifyRefreshToken(token);
-      const user = await User.findById(decoded.id);
-      if (user) {
-        user.refreshTokens.pull(token);
-        await user.save();
+      const decoded = verifyRefreshToken(token);
+      if (decoded.familyId) {
+        await RefreshToken.deleteMany({ familyId: decoded.familyId });
       }
     } catch {
       // Ignore token verification errors during logout
@@ -311,8 +321,9 @@ export const resetPassword = catchAsync(async (req, res, next) => {
   user.resetCodeExpiry = null;
   user.loginAttempts = 0; // Reset login attempts
   user.lockUntil = null;
-  user.refreshTokens = []; // Revoke active sessions on password change for security
+  user.refreshTokens = []; 
   await user.save();
+  await RefreshToken.deleteMany({ user: user._id });
 
   res.status(200).json({
     status: 'success',

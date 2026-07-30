@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import AuthLayout from './components/AuthLayout';
+import ErrorBoundary from './components/ErrorBoundary';
 import GoogleAuthSuccess from './pages/GoogleAuthSuccess';
 
 // Lazy loading components for performance and code splitting
@@ -52,47 +53,49 @@ const PublicRoute = ({ children }) => {
 
 function App() {
   return (
-    <ThemeProvider>
-      <BrowserRouter>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            {/* PUBLIC ROUTES — only for non logged in users */}
-            <Route element={
-              <PublicRoute>
-                <AuthLayout />
-              </PublicRoute>
-            }>
-              <Route path="/" element={<Navigate to="/register" replace />} />
-              <Route path="/register" element={<Signup />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/verify-email" element={<VerifyEmail />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-            </Route>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <BrowserRouter>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              {/* PUBLIC ROUTES — only for non logged in users */}
+              <Route element={
+                <PublicRoute>
+                  <AuthLayout />
+                </PublicRoute>
+              }>
+                <Route path="/" element={<Navigate to="/register" replace />} />
+                <Route path="/register" element={<Signup />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+              </Route>
 
-            {/* GOOGLE AUTH SUCCESS */}
-            <Route path="/auth/success" element={<GoogleAuthSuccess />} />
+              {/* GOOGLE AUTH SUCCESS */}
+              <Route path="/auth/success" element={<GoogleAuthSuccess />} />
 
-            {/* PROTECTED ROUTES */}
-            <Route element={
-              <ProtectedRoute>
-                <DashboardLayout />
-              </ProtectedRoute>
-            }>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/exams" element={<Exams />} />
-              <Route path="/study" element={<StudyTracker />} />
-              <Route path="/subjects" element={<Subjects />} />
-              <Route path="/planner" element={<CalendarPlanner />} />
-              <Route path="/ai-assistant" element={<AIAssistant />} />
-            </Route>
+              {/* PROTECTED ROUTES */}
+              <Route element={
+                <ProtectedRoute>
+                  <DashboardLayout />
+                </ProtectedRoute>
+              }>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/exams" element={<Exams />} />
+                <Route path="/study" element={<StudyTracker />} />
+                <Route path="/subjects" element={<Subjects />} />
+                <Route path="/planner" element={<CalendarPlanner />} />
+                <Route path="/ai-assistant" element={<AIAssistant />} />
+              </Route>
 
-            {/* CATCH ALL */}
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
-        </Suspense>
-      </BrowserRouter>
-    </ThemeProvider>
+              {/* CATCH ALL */}
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

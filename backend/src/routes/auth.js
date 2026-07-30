@@ -1,5 +1,6 @@
 import express from 'express';
 import passport from 'passport';
+import crypto from 'crypto';
 import { body } from 'express-validator';
 import { validate } from '../middleware/validator.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
@@ -12,7 +13,8 @@ import {
   refreshToken,
   logout
 } from '../controllers/authController.js';
-import { generateAccessToken, generateRefreshToken, sendRefreshTokenCookie } from '../services/tokenService.js';
+import { generateAccessToken, generateRefreshToken, sendRefreshTokenCookie, hashToken } from '../services/tokenService.js';
+import RefreshToken from '../models/RefreshToken.js';
 
 const router = express.Router();
 
@@ -80,11 +82,16 @@ router.get(
     try {
       const user = req.user;
       const accessToken = generateAccessToken(user._id);
-      const newRefreshToken = generateRefreshToken(user._id);
+      const familyId = crypto.randomUUID();
+      const newRefreshToken = generateRefreshToken(user._id, familyId);
+      const tokenHash = hashToken(newRefreshToken);
 
-      user.refreshTokens = user.refreshTokens || [];
-      user.refreshTokens.push(newRefreshToken);
-      await user.save();
+      await RefreshToken.create({
+        user: user._id,
+        tokenHash,
+        familyId,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      });
 
       sendRefreshTokenCookie(res, newRefreshToken);
 

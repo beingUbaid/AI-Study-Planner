@@ -21,9 +21,13 @@ services:
       - PORT=5000
       - MONGO_URI=mongodb://mongodb:27017/studyplanner
       - CLIENT_URL=http://localhost:80
-      - JWT_SECRET=production_jwt_access_secret_987654321
-      - JWT_REFRESH_SECRET=production_jwt_refresh_secret_123456789
       - NODE_ENV=production
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASS=${EMAIL_PASS}
     depends_on:
       - mongodb
     networks:
@@ -36,9 +40,12 @@ services:
     command: ["node", "worker.js"]
     environment:
       - MONGO_URI=mongodb://mongodb:27017/studyplanner
-      - JWT_SECRET=production_jwt_access_secret_987654321
-      - JWT_REFRESH_SECRET=production_jwt_refresh_secret_123456789
       - NODE_ENV=production
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASS=${EMAIL_PASS}
     depends_on:
       - mongodb
     networks:
