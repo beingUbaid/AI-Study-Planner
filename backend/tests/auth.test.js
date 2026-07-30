@@ -17,9 +17,9 @@ import RefreshToken from '../src/models/RefreshToken.js';
 let mongoServer;
 
 beforeAll(async () => {
-  process.env.NODE_ENV = 'development';
-  process.env.JWT_SECRET = 'test_jwt_access_secret_12345';
-  process.env.JWT_REFRESH_SECRET = 'test_jwt_refresh_secret_54321';
+  process.env.NODE_ENV = 'test';
+  process.env.JWT_SECRET = 'ci_test_jwt_access_secret_32chars_long_ok_pad';
+  process.env.JWT_REFRESH_SECRET = 'ci_test_jwt_refresh_secret_32chars_long_ok_pad';
   // Use a much smaller MongoDB binary version (4.4.29 is ~70MB compared to 8.x which is ~780MB)
   // to avoid network timeouts during automated tests.
   mongoServer = await MongoMemoryServer.create({

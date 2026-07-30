@@ -13,7 +13,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s
     restart: always
 
   backend:
@@ -23,18 +23,29 @@ services:
       - "5000:5000"
     environment:
       - PORT=5000
-      - MONGO_URI=mongodb://mongodb:27017/studyplanner
-      - CLIENT_URL=http://localhost:8080
       - NODE_ENV=production
+      - MONGO_URI=mongodb://mongodb:27017/studyplanner
+      - CLIENT_URL=${CLIENT_URL:-http://localhost:8080}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:8080}
+      - APP_VERSION=${APP_VERSION:-1.0.0}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - AI_MODEL=${AI_MODEL:-llama-3.1-8b-instant}
       - EMAIL_USER=${EMAIL_USER}
       - EMAIL_PASS=${EMAIL_PASS}
+      - ENABLE_EMAIL=${ENABLE_EMAIL:-false}
+      - ENABLE_GOOGLE_OAUTH=${ENABLE_GOOGLE_OAUTH:-false}
+      - COOKIE_DOMAIN=${COOKIE_DOMAIN}
     depends_on:
       mongodb:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       - study_planner_net
     restart: always
@@ -44,16 +55,25 @@ services:
     container_name: study_planner_worker
     command: ["node", "worker.js"]
     environment:
-      - MONGO_URI=mongodb://mongodb:27017/studyplanner
       - NODE_ENV=production
+      - MONGO_URI=mongodb://mongodb:27017/studyplanner
+      - CLIENT_URL=${CLIENT_URL:-http://localhost:8080}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
       - GROQ_API_KEY=${GROQ_API_KEY}
+      - AI_MODEL=${AI_MODEL:-llama-3.1-8b-instant}
       - EMAIL_USER=${EMAIL_USER}
       - EMAIL_PASS=${EMAIL_PASS}
+      - ENABLE_EMAIL=${ENABLE_EMAIL:-false}
+      - COOKIE_DOMAIN=${COOKIE_DOMAIN}
     depends_on:
       mongodb:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 60s
+      timeout: 5s
+      retries: 2
     networks:
       - study_planner_net
     restart: always
@@ -65,7 +85,13 @@ services:
       - "8080:8080"
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - study_planner_net
     restart: always

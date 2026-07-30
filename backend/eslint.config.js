@@ -27,7 +27,7 @@ export default [
       }
     },
     rules: {
-      'no-unused-vars': ['warn', { argsIgnorePattern: '^next$|^_', varsIgnorePattern: '^next$|^_' }],
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_|^next$', varsIgnorePattern: '^_|^next$', caughtErrorsIgnorePattern: '^_' }],
       'no-undef': 'error',
       'eqeqeq': 'error',
       'no-dupe-keys': 'error',

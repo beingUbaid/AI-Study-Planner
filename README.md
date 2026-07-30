@@ -1,76 +1,77 @@
-# 🎓 AI Study Planner — Smart Adaptive Learning & Schedule Assistant
+# 🎓 AI Study Planner
 
 <div align="center">
-  <br />
-  
-  [![React 19](https://img.shields.io/badge/Frontend-React%2019%20%7C%20Vite%20%7C%20Tailwind-61DAFB?logo=react&logoColor=white&style=for-the-badge)](https://react.dev)
-  [![Node.js](https://img.shields.io/badge/Backend-Node.js%20%7C%20Express%20%7C%20MongoDB-339933?logo=nodedotjs&logoColor=white&style=for-the-badge)](https://nodejs.org)
-  [![Groq AI](https://img.shields.io/badge/AI%20Engine-Groq%20Llama%25203--8B-purple?logo=meta&logoColor=white&style=for-the-badge)](https://groq.com)
-  
-  <br />
-  
-  <a href="https://github.com/beingUbaid/AI-Study-Planner">
-    <img src="https://img.shields.io/badge/⭐%20Star%20Repo-Support%20Us-purple?style=for-the-badge&logo=github" alt="Star Repo" />
-  </a>
+
+[![React 19](https://img.shields.io/badge/Frontend-React%2019%20%7C%20Vite-61DAFB?logo=react&logoColor=white&style=for-the-badge)](https://react.dev)
+[![Node.js](https://img.shields.io/badge/Backend-Node.js%20%7C%20Express%20%7C%20MongoDB-339933?logo=nodedotjs&logoColor=white&style=for-the-badge)](https://nodejs.org)
+[![Groq AI](https://img.shields.io/badge/AI-Groq%20Llama%203.1-purple?logo=meta&logoColor=white&style=for-the-badge)](https://groq.com)
+[![CI](https://img.shields.io/github/actions/workflow/status/beingUbaid/AI-Study-Planner/ci.yml?style=for-the-badge&label=CI)](https://github.com/beingUbaid/AI-Study-Planner/actions)
+
+**An adaptive AI-powered study platform that converts unstructured course syllabi into optimized, spaced-repetition study schedules.**
+
+[🚀 View Demo](https://github.com/beingUbaid/AI-Study-Planner) · [📖 Deployment Guide](./DEPLOYMENT.md)
+
 </div>
 
 ---
 
-## 📖 Project Overview
+## 📖 Overview
 
-**AI Study Planner** is a production-grade adaptive educational platform designed to help students convert unstructured lecture course syllabi into optimized, structured study schedules. The system leverages:
-1. **Deterministic Spaced-Repetition Scheduling:** An algorithmic scheduling core implementing Leitner Box methodologies and topological dependency sorting.
-2. **AI-Assisted Operations:** Generates quiz explanations, interactive flashcards, chatbot tutors, and schedule descriptions.
+AI Study Planner helps students convert disorganized course materials into structured study plans through two distinct layers:
+
+1. **Deterministic Scheduling Engine** — A pure-logic engine implementing Leitner spaced repetition, topological chapter dependency sorting, burnout guardrails and exam-proximity compression. This layer never calls an LLM and produces reproducible, testable schedules.
+
+2. **LLM Assistance Layer (Groq)** — Used only for natural-language tasks: extracting chapter titles from uploaded PDFs, generating flashcards/quizzes, powering the study chatbot and writing schedule explanations. All LLM outputs are validated by strict Zod schemas with automatic retry-and-feedback loops.
 
 ---
 
-## 🔄 System Architecture & Data Flow
+## 🏗️ Architecture
 
-```mermaid
-graph TD
-    subgraph Client [React 19 Frontend SPA]
-        UI[Glassmorphic Dashboard] -->|Optimistic UI Toggles| UI
-        Error[ErrorBoundary React Container] --> UI
-    end
-    subgraph API [Express Backend API]
-        Router[CORS Allowlist & Helmet CSP] -->|AsyncLocalStorage Request Context| Controllers[Controllers]
-        Controllers -->|Zod Startup Checks| EnvConfig[Zod Config Validation]
-        Controllers -->|Secure Cookie Hashed Token Rotation| Auth[Auth Controller]
-        Controllers -->|Synchronous PDF upload extraction| Upload[PDF Upload Controller]
-        Upload -->|Queue jobs| Tasks[In-Memory Queue Service]
-    end
-    subgraph Worker [Standalone Cron Process]
-        Cron[node-cron Engine] -->|Distributed DB Locks| Locks[Lock Schema]
-        Cron -->|Stateful claim| Delivery[NotificationDelivery Schema]
-        Delivery -->|Idempotent mail alert| Mail[SMTP / Winston Logger]
-    end
-    API -->|Mongoose Indexes| DB[(MongoDB database)]
-    Worker -->|Mongoose Indexes| DB
+```
+┌─────────────────────┐     HTTPS     ┌──────────────────────┐
+│   React 19 SPA      │◄─────────────►│   Express API        │
+│   (Vite / Vercel)   │               │   (Node 20 / Render) │
+└─────────────────────┘               └──────────┬───────────┘
+                                                 │ Mongoose
+                                      ┌──────────▼───────────┐
+                                      │   MongoDB Atlas       │
+                                      │   (shared database)   │
+                                      └──────────┬───────────┘
+                                                 │ Mongoose
+                                      ┌──────────▼───────────┐
+                                      │   Background Worker  │
+                                      │   (Render / Railway) │
+                                      └──────────────────────┘
 ```
 
+The **API** and **Worker** are separate Node processes sharing the same MongoDB database.  
+The Worker runs node-cron jobs for daily exam reminders using distributed DB locks and idempotent `NotificationDelivery` records.
+
 ---
 
-## 🌟 Key Architecture Subsystems
+## ✨ Features
 
-### 1. Deterministic Scheduling Engine
-Unlike unpredictable LLM-generated calendars, this platform implements a fully deterministic scheduler:
-* **Prerequisites Topological Sort:** Analyzes chapter dependencies, ensuring foundational concepts are scheduled before advanced subjects.
-* **Leitner Box Spaced Repetition:** Calibrates daily workloads based on student quiz scores, reducing load for mastered topics (-50% estimated hours) and scaling up for difficult ones (+30%).
-* **Burnout & Break Guardrails:** Automatically schedules break days every 7th day and monitors daily densities.
+| Category | Feature |
+|----------|---------|
+| **Scheduling** | Leitner Box spaced repetition, prerequisite topological sort, burnout detection, break day insertion |
+| **AI** | PDF syllabus extraction, adaptive flashcards, interactive quizzes, study chatbot with auto-rebalance |
+| **Auth** | Email verification, bcrypt passwords, hashed refresh token families (RTR), account lockout |
+| **Reminders** | Daily exam reminders via SMTP with distributed locks and idempotent delivery |
+| **Security** | Helmet CSP, CORS allowlist, NoSQL sanitization, rate limiting, magic-byte PDF validation |
 
-### 2. LLM Boundary & Zod Validation Retries
-* **Structured JSON Mode:** Enforces JSON responses from Groq APIs verified against Zod schemas (with character limits, unique option array lengths, and index ranges).
-* **Agentic Error Feedback Loops:** If a schema validation fails, the validation error is appended to the message history, letting the LLM self-correct on subsequent retries.
-* **Controlled Fallbacks:** Standardizes UI layouts via fallback responses if the retry threshold is exceeded.
+---
 
-### 3. Hashed Refresh Token Families
-* **Token Rotation (RTR):** Stores cryptographically hashed SHA-256 signatures of refresh tokens in a dedicated collection.
-* **Theft Replay Lockout:** Generates linked `familyId` token lineages. If a reused refresh token is presented, the entire family is revoked, force-logging out the student.
+## 🛠️ Tech Stack
 
-### 4. Background Worker & Idempotent Reminders
-* **Graceful Decoupling:** Decouples daily cron checks into a standalone `worker.js` node instance.
-* **Distributed DB Locks:** Leverages a `Lock` schema with MongoDB TTL indexes to ensure only one worker executes reminders.
-* **Recipient Idempotency:** Implements a stateful `NotificationDelivery` claim index matching unique user and calendar day scopes.
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, Vite, Tailwind CSS, React Router v7 |
+| Backend | Node.js 20, Express 5, Mongoose 9, Winston |
+| Database | MongoDB Atlas (production), mongodb-memory-server (tests) |
+| AI | Groq SDK (`llama-3.1-8b-instant`), Zod response validation |
+| Auth | JWT (access 15m / refresh 7d), SHA-256 token hashing, HttpOnly cookies |
+| Infra | Docker, Nginx (unprivileged), GitHub Actions CI |
+| Testing | Jest + Supertest (backend), Vitest (frontend), Playwright (E2E) |
 
 ---
 
@@ -78,72 +79,107 @@ Unlike unpredictable LLM-generated calendars, this platform implements a fully d
 
 ```
 AI-Study-Planner/
+├── .github/workflows/ci.yml       # CI: lint → test → build → E2E
 ├── backend/
 │   ├── src/
-│   │   ├── config/           # Database connections & Zod startup environment schemas
-│   │   ├── controllers/      # Resource ownership controllers (Auth, AI, Subjects)
-│   │   ├── middleware/       # Rate limiting, Request validation, and custom CORS configurations
-│   │   ├── models/           # Hashed tokens, NotificationClaim, Locks, and database indexes
-│   │   ├── routes/           # REST API routes
-│   │   ├── services/         # Token handling, callLLM retries, and queue services
-│   │   └── utils/            # Winston structured logging, sendEmail, and planner logic
-│   ├── tests/                # Jest & Supertest integration suite (auth, scheduler)
-│   ├── index.js              # API Entrypoint
-│   └── worker.js             # Standalone background cron job worker
+│   │   ├── config/
+│   │   │   ├── db.js              # MongoDB connection with retry/backoff
+│   │   │   ├── env.js             # Zod startup environment validation
+│   │   │   └── passport.js        # Google OAuth (optional)
+│   │   ├── controllers/           # Auth, AI, Subjects, Planner, Analytics
+│   │   ├── middleware/
+│   │   │   ├── rateLimiter.js     # Per-route rate limits
+│   │   │   └── uploadValidator.js # PDF magic-byte + page-count validation
+│   │   ├── models/
+│   │   │   ├── NotificationDelivery.js  # Idempotent reminder tracking
+│   │   │   ├── RefreshToken.js          # Hashed token families + TTL
+│   │   │   └── Lock.js                  # Distributed cron locks
+│   │   ├── services/
+│   │   │   ├── aiService.js       # Groq calls with Zod validation + retries
+│   │   │   └── tokenService.js    # JWT generation, cookie helpers
+│   │   └── utils/
+│   │       ├── cronJobs.js        # runExamReminders() — fully testable
+│   │       ├── plannerLogic.js    # Deterministic scheduling engine
+│   │       └── logger.js          # Winston with PII redaction
+│   ├── tests/                     # Jest integration tests
+│   ├── app.js                     # Express app (no server binding)
+│   ├── index.js                   # API entry point
+│   └── worker.js                  # Standalone cron worker entry point
 ├── frontend/
 │   ├── src/
-│   │   ├── components/       # UI Components, page layouts, skeletons, and Error Boundaries
-│   │   ├── context/          # State management (Theme, Auth)
-│   │   └── services/         # Axios interceptors handling token rotation transparently
-│   └── vercel.json           # SPA redirect rules configuration
+│   │   ├── components/            # Reusable UI + ErrorBoundary
+│   │   ├── pages/                 # Dashboard, Calendar, Subjects, etc.
+│   │   └── services/              # Axios with transparent token refresh
+│   ├── tests-e2e/                 # Playwright E2E tests
+│   └── vercel.json                # SPA rewrite rules
+├── docker-compose.yml             # Full local stack
+└── DEPLOYMENT.md                  # Production deployment guide
 ```
 
 ---
 
-## ⚙️ Running Locally
+## ⚡ Quick Start (Local Development)
 
-### 1. Setup Backend
-Use reproducible `npm ci` commands:
+### Prerequisites
+- Node.js 20+
+- MongoDB running locally or an Atlas URI
+
+### 1. Clone
+```bash
+git clone https://github.com/beingUbaid/AI-Study-Planner.git
+cd AI-Study-Planner
+```
+
+### 2. Backend
 ```bash
 cd backend
 npm ci
 cp .env.example .env
-# Configure JWT_SECRET (32+ chars), MONGO_URI, and GROQ_API_KEY
+# Edit .env — set MONGO_URI, JWT_SECRET, JWT_REFRESH_SECRET, GROQ_API_KEY
 npm run dev
 ```
 
-To boot the worker in a separate standalone terminal process:
+### 3. Worker (separate terminal)
 ```bash
 cd backend
 node worker.js
 ```
 
-### 2. Setup Frontend
+### 4. Frontend
 ```bash
-cd ../frontend
+cd frontend
 npm ci
 cp .env.example .env
-# Verify VITE_API_URL is configured
+# Ensure VITE_API_URL=http://localhost:5000/api
 npm run dev
 ```
 
+### 5. Using Docker (full stack)
+```bash
+# Create a .env file in root with all required secrets (see DEPLOYMENT.md)
+docker-compose up --build
+```
+
+API: `http://localhost:5000` · Frontend: `http://localhost:8080`
+
 ---
 
-## 🧪 Testing Suites
+## 🧪 Testing
 
-Run backend automated Jest and Supertest integration tests:
+### Backend (Jest + Supertest)
 ```bash
 cd backend
+npm test                    # run all tests
+npm run test:coverage       # with coverage report
+```
+
+### Frontend (Vitest)
+```bash
+cd frontend
 npm test
 ```
 
-Run frontend Vitest unit tests:
-```bash
-cd frontend
-npm run test
-```
-
-Run Playwright End-to-End browser integration tests:
+### End-to-End (Playwright)
 ```bash
 cd frontend
 npx playwright test
@@ -151,9 +187,26 @@ npx playwright test
 
 ---
 
-## 🐳 Docker Deployment Stack
+## 🌐 Health Endpoints
 
-To spin up the entire production container stack locally (incorporating health checks, alpine environments, and non-root executors):
-```bash
-docker-compose up --build
-```
+| Path | Method | Description |
+|------|--------|-------------|
+| `/health` | GET | Process liveness — always returns 200 if running |
+| `/ready`  | GET | Readiness — returns 200 only when MongoDB is connected |
+| `/version`| GET | Returns `APP_VERSION` from environment |
+
+---
+
+## 🔒 Security Highlights
+
+- **Secrets**: All environment variables validated by Zod on startup — server refuses to start with placeholders or weak values
+- **Tokens**: SHA-256 hashed refresh tokens; full family revocation on reuse detection
+- **Cookies**: `HttpOnly`, `Secure` (production), `SameSite=None` for cross-origin API setups
+- **Uploads**: Magic-byte validation (`%PDF`), 5 MB size limit, 15-page limit, guaranteed `finally` cleanup
+- **Logs**: Winston with recursive PII redaction — no emails, passwords, tokens, IPs or AI prompts in logs
+
+---
+
+## 📄 License
+
+MIT — see [LICENSE](./LICENSE)

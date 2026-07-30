@@ -175,9 +175,10 @@ app.get('/version', (req, res) => {
   res.status(200).json({ version: env.APP_VERSION });
 });
 
-// Standardized 404 handler for unmatched routes
+// Standardized 404 handler — never exposes query strings or raw originalUrl
 app.use((req, res, next) => {
-  next(new AppError(`Route not found: ${req.method} ${req.originalUrl}`, 404));
+  const safePath = req.path || '/';   // req.path is already stripped of query string
+  next(new AppError(`Route not found: ${req.method} ${safePath}`, 404));
 });
 
 // Centralized error handler (must be the last middleware)

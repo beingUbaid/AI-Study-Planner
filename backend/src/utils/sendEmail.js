@@ -3,6 +3,13 @@ import logger from './logger.js'
 import { env } from '../config/env.js'
 
 const sendEmail = async (to, subject, html) => {
+  if (env.NODE_ENV === 'test') {
+    if (globalThis.mockSendEmailShouldFail) {
+      throw new Error('SMTP_CONN_REFUSED');
+    }
+    return;
+  }
+
   try {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
@@ -22,6 +29,7 @@ const sendEmail = async (to, subject, html) => {
     logger.info('Email notification sent successfully ✅')
   } catch (error) {
     logger.error('Email sending failed ❌', { error: error.message })
+    throw error;
   }
 }
 
