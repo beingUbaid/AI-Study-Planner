@@ -31,3 +31,8 @@ backend/uploads/*
 *.njsproj
 *.sln
 *.sw?
+
+# Test coverage
+coverage
+backend/coverage
+

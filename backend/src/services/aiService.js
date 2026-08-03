@@ -30,6 +30,45 @@ export const callLLM = async ({
   retries = 3,
   schema = null
 }) => {
+  if (process.env.AI_PROVIDER === 'mock') {
+    logger.info('[MOCK AI] Bypassing Groq LLM call and returning mock response', { jsonMode, hasSchema: !!schema });
+    if (schema) {
+      if (schema === SyllabusSchema) {
+        return [
+          { name: "Chapter 1: Foundations", estimatedHours: 2, order: 1 },
+          { name: "Chapter 2: Core Dynamics", estimatedHours: 3, order: 2 },
+          { name: "Chapter 3: Advanced Applications", estimatedHours: 4, order: 3 }
+        ];
+      }
+      if (schema === FlashcardSchema) {
+        return [
+          { front: "What is Chapter 1 concept?", back: "Description of Chapter 1 core concept.", category: "General" },
+          { front: "What is Chapter 2 concept?", back: "Description of Chapter 2 core concept.", category: "General" }
+        ];
+      }
+      if (schema === QuizSchema) {
+        return [
+          {
+            question: "What is the primary unit of force?",
+            options: ["Newton", "Joule", "Watt", "Pascal"],
+            correctAnswer: 0,
+            explanation: "Newton is the SI unit of force."
+          }
+        ];
+      }
+      if (schema === RoadmapSchema) {
+        return [
+          { days: "Days 1-3", focus: "Review Fundamentals", description: "Study core concepts and complete practice worksheets." },
+          { days: "Days 4-5", focus: "Complete Exercises", description: "Work through target practice problems and review solutions." }
+        ];
+      }
+    }
+    const userPrompt = messages.find(m => m.role === 'user')?.content || '';
+    if (userPrompt.toLowerCase().includes('rebalance')) {
+      return "Mocked AI explanation: We rescheduled your missed tasks into tomorrow.";
+    }
+    return "Mocked AI explanation: Your plan has been structured optimally to balance workload and exam dates.";
+  }
   let attempt = 0;
   let delay = 1000; // start with 1 second
   const messagesHistory = [...messages];
@@ -361,3 +400,44 @@ export const generateRebalanceExplanation = async (missedDetails, dailyStudyHour
     return `Your plan has been updated! Missed tasks have been distributed across the upcoming days without exceeding your daily study hour limit of ${dailyStudyHours} hours.`;
   }
 };
+
+// Generate AI Weakness Analysis from incorrect quiz questions
+export const generateWeaknessAnalysis = async (subject, topic, incorrectQuestions) => {
+  if (!incorrectQuestions || incorrectQuestions.length === 0) {
+    return "Outstanding! You got a perfect score, demonstrating full understanding and complete mastery of this topic.";
+  }
+
+  // Format incorrect questions for LLM consumption
+  const incorrectSummary = incorrectQuestions.map((q, idx) => {
+    return `Question ${idx + 1}: "${q.question}"
+- Student's Answer: "${q.options[q.userAnswer] || 'Skipped'}"
+- Correct Answer: "${q.options[q.correctAnswer]}"
+- Explanation: ${q.explanation || 'N/A'}`;
+  }).join('\n\n');
+
+  const messages = [
+    {
+      role: 'system',
+      content: `You are an expert subject tutor and academic coach.
+Analyze the student's incorrect answers on a practice test for Subject: ${subject}, Topic: ${topic}.
+Provide a brief, supportive, and highly actionable diagnostic breakdown (maximum 3 bullet points, under 150 words total):
+1. Identify the conceptual gaps or patterns in their errors (e.g. formula mix-ups, conceptual confusion).
+2. Pinpoint exactly what sub-topics or rules they need to re-study.
+3. Suggest a quick, specific study strategy to improve.
+Ensure the tone is motivating and helpful. Do not output any markdown code blocks, just raw markdown bullet points.`
+    },
+    {
+      role: 'user',
+      content: `Incorrect questions:\n\n${incorrectSummary}`
+    }
+  ];
+
+  try {
+    return await callLLM({ messages, maxTokens: 400 });
+  } catch (err) {
+    logger.warn('Groq Weakness Analysis failed, using fallback:', err.message);
+    // Generic fallback based on topics
+    return `Review the concepts related to: ${incorrectQuestions.slice(0, 3).map(q => `"${q.question.substring(0, 30)}..."`).join(', ')}. Focus on fundamental principles, definitions, and practicing similar step-by-step problems.`;
+  }
+};
+

@@ -1,23 +1,35 @@
-FROM node:20-alpine
-WORKDIR /app
+# Pinned Node 20 alpine image
+FROM node:20.18.0-alpine
+
+# Set environment
 ENV NODE_ENV=production
+WORKDIR /app
 
-# Install only production dependencies
-COPY package*.json ./
-RUN npm ci --omit=dev
+# Copy package descriptors first to benefit from layer caching
+COPY package.json package-lock.json ./
 
-# Copy only required source files (excluding tests, local .env files, dev settings)
-COPY app.js index.js worker.js ./
+# Run audit report step as requested, then install production-only dependencies
+RUN npm audit --omit=dev || true \
+    && npm ci --omit=dev \
+    && npm cache clean --force
+
+# Copy only index.js, worker.js, app.js and source directory src
+COPY index.js worker.js app.js ./
 COPY src/ ./src/
 
-# Setup uploads folder and secure ownership for non-root node user
-RUN mkdir -p /app/uploads && chown -R node:node /app
+# Ensure the uploads directory exists and is owned by the node user
+RUN mkdir -p /app/uploads \
+    && chown -R node:node /app
 
+# Switch to the non-root node user
 USER node
+
+# Expose backend port
 EXPOSE 5000
 
-# Native Node healthcheck to verify liveness
+# Docker healthcheck using the readiness endpoint /ready
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "const http = require('http'); const req = http.request('http://localhost:' + (process.env.PORT || 5000) + '/health', (res) => { if (res.statusCode === 200) { process.exit(0); } else { process.exit(1); } }); req.on('error', () => process.exit(1)); req.end();"
+  CMD node -e "const http = require('http'); const req = http.request({ host: 'localhost', port: process.env.PORT || 5000, path: '/ready', timeout: 2000 }, (res) => { if (res.statusCode === 200) { process.exit(0); } else { process.exit(1); } }); req.on('error', () => process.exit(1)); req.end();"
 
+# Start the application
 CMD ["node", "index.js"]

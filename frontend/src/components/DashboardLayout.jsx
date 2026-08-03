@@ -400,6 +400,18 @@ const DashboardLayout = () => {
               <MessageSquare className="w-5 h-5" />
               <span>AI Chatbot Tutor</span>
             </Link>
+
+            <Link
+              to="/topic-testing"
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                activePath === '/topic-testing'
+                  ? 'bg-gradient-to-r from-primary-500/20 via-purple-500/15 to-transparent text-white font-extrabold text-base border-l-4 border-primary-400 shadow-md shadow-primary-500/10 scale-[1.02]'
+                  : 'text-slate-350 text-sm font-bold hover:bg-slate-800/40 hover:text-white border-l-4 border-transparent'
+              }`}
+            >
+              <Sparkles className="w-5 h-5 text-purple-400" />
+              <span>AI Testing Suite</span>
+            </Link>
             
             <Link
               to="/exams"
@@ -759,6 +771,19 @@ const DashboardLayout = () => {
                 >
                   <MessageSquare className="w-5 h-5" />
                   <span>AI Chatbot Tutor</span>
+                </Link>
+
+                <Link
+                  to="/topic-testing"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                    activePath === '/topic-testing'
+                      ? 'bg-gradient-to-r from-primary-500/20 via-purple-500/15 to-transparent text-white font-extrabold text-base border-l-4 border-primary-400 shadow-md shadow-primary-500/10 scale-[1.02]'
+                      : 'text-slate-350 text-sm font-bold hover:bg-slate-800/40 hover:text-white border-l-4 border-transparent'
+                  }`}
+                >
+                  <Sparkles className="w-5 h-5 text-purple-400" />
+                  <span>AI Testing Suite</span>
                 </Link>
                 
                 <Link

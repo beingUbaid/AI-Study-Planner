@@ -41,16 +41,14 @@ app.use(helmet({
 }));
 
 // Whitelisted CORS setup (supports credentials securely for verified domains only)
-const allowedOrigins = env.ALLOWED_ORIGINS 
-  ? env.ALLOWED_ORIGINS.split(',').map(o => o.trim()) 
-  : [env.CLIENT_URL];
+const allowedOrigins = env.ALLOWED_ORIGINS;
 
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(new AppError('Not allowed by CORS', 403));
     }
   },
   credentials: true

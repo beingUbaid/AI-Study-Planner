@@ -19,6 +19,7 @@ const StudyTracker = lazy(() => import('./pages/StudyTracker'));
 const Subjects = lazy(() => import('./pages/Subjects'));
 const CalendarPlanner = lazy(() => import('./pages/CalendarPlanner'));
 const AIAssistant = lazy(() => import('./pages/AIAssistant'));
+const TopicTesting = lazy(() => import('./pages/TopicTesting'));
 
 // Premium fullscreen loading spinner for route transitions
 const PageLoader = () => (
@@ -87,6 +88,7 @@ function App() {
                 <Route path="/subjects" element={<Subjects />} />
                 <Route path="/planner" element={<CalendarPlanner />} />
                 <Route path="/ai-assistant" element={<AIAssistant />} />
+                <Route path="/topic-testing" element={<TopicTesting />} />
               </Route>
 
               {/* CATCH ALL */}

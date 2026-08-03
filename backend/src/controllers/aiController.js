@@ -1,6 +1,7 @@
 import fs from 'fs';
 import Subject from '../models/Subject.js';
 import Chapter from '../models/Chapter.js';
+import TopicTest from '../models/TopicTest.js';
 import StudyPlan from '../models/StudyPlan.js';
 import logger from '../utils/logger.js';
 import Job from '../models/Job.js';
@@ -314,5 +315,92 @@ export const getJobStatus = catchAsync(async (req, res, next) => {
       error: job.error,
       createdAt: job.createdAt
     }
+  });
+});
+
+// ─────────────────────────────────────────
+// 8. SAVE TOPIC TEST & GENERATE WEAKNESS ANALYSIS
+// ─────────────────────────────────────────
+export const saveTopicTest = catchAsync(async (req, res, next) => {
+  const { subjectName, topic, difficulty = 'Medium', questions = [] } = req.body;
+
+  if (!subjectName || !topic || !questions || questions.length === 0) {
+    return next(new AppError('Please provide subjectName, topic, and test questions', 400));
+  }
+
+  // Calculate score & filter incorrect questions
+  let correctCount = 0;
+  const evaluatedQuestions = questions.map(q => {
+    const isCorrect = q.userAnswer === q.correctAnswer;
+    if (isCorrect) correctCount++;
+    return {
+      question: q.question,
+      options: q.options,
+      correctAnswer: q.correctAnswer,
+      userAnswer: q.userAnswer !== undefined ? q.userAnswer : -1,
+      explanation: q.explanation || ''
+    };
+  });
+
+  const totalQuestions = questions.length;
+  const score = Math.round((correctCount / totalQuestions) * 100);
+
+  // Identify incorrect questions for weakness analysis
+  const incorrectQuestions = evaluatedQuestions.filter(q => q.userAnswer !== q.correctAnswer);
+
+  // Call AI weakness analysis service
+  const weaknessAnalysis = await aiService.generateWeaknessAnalysis(
+    subjectName,
+    topic,
+    incorrectQuestions
+  );
+
+  const topicTest = await TopicTest.create({
+    user: req.user.id,
+    subjectName,
+    topic,
+    score,
+    totalQuestions,
+    difficulty,
+    weaknessAnalysis,
+    questions: evaluatedQuestions
+  });
+
+  res.status(201).json({
+    status: 'success',
+    message: 'Topic test saved and analyzed successfully ✅',
+    topicTest
+  });
+});
+
+// ─────────────────────────────────────────
+// 9. GET ALL TOPIC TESTS (HISTORY)
+// ─────────────────────────────────────────
+export const getTopicTests = catchAsync(async (req, res, next) => {
+  const topicTests = await TopicTest.find({ user: req.user.id }).sort({ createdAt: -1 });
+
+  res.status(200).json({
+    status: 'success',
+    count: topicTests.length,
+    topicTests
+  });
+});
+
+// ─────────────────────────────────────────
+// 10. GET TOPIC TEST DETAILS BY ID
+// ─────────────────────────────────────────
+export const getTopicTestById = catchAsync(async (req, res, next) => {
+  const topicTest = await TopicTest.findOne({
+    _id: req.params.id,
+    user: req.user.id
+  });
+
+  if (!topicTest) {
+    return next(new AppError('Topic test result not found or access denied.', 404));
+  }
+
+  res.status(200).json({
+    status: 'success',
+    topicTest
   });
 });

@@ -5,6 +5,9 @@ echo           Starting AI Study Planner
 echo ===================================================
 echo.
 
+set "PROJECT_ROOT=%~dp0"
+cd /d "%PROJECT_ROOT%"
+
 :: Check Backend
 cd backend
 if not exist node_modules (
@@ -13,7 +16,7 @@ if not exist node_modules (
 )
 echo Starting Backend Server...
 start "AI Study Planner - Backend" cmd /k "npm run dev"
-cd ..
+cd /d "%PROJECT_ROOT%"
 
 :: Check Frontend
 cd frontend
@@ -23,7 +26,7 @@ if not exist node_modules (
 )
 echo Starting Frontend Server...
 start "AI Study Planner - Frontend" cmd /k "npm run dev"
-cd ..
+cd /d "%PROJECT_ROOT%"
 
 echo.
 echo ===================================================

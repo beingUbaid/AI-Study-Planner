@@ -8,7 +8,10 @@ import {
   aiGenerateFlashcards,
   aiGenerateQuiz,
   aiGenerateExamMode,
-  getJobStatus
+  getJobStatus,
+  saveTopicTest,
+  getTopicTests,
+  getTopicTestById
 } from '../controllers/aiController.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 import { validatePDFMagicBytes } from '../middleware/uploadValidator.js';
@@ -54,5 +57,9 @@ router.post('/generate-flashcards', aiLimiter, aiGenerateFlashcards);
 router.post('/generate-quiz', aiLimiter, aiGenerateQuiz);
 router.post('/generate-exam-mode', aiLimiter, aiGenerateExamMode);
 router.get('/job/:jobId', getJobStatus);
+
+router.post('/topic-tests', saveTopicTest);
+router.get('/topic-tests', getTopicTests);
+router.get('/topic-tests/:id', getTopicTestById);
 
 export default router;

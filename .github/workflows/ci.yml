@@ -45,6 +45,8 @@ jobs:
         run: cd backend && npm run test:coverage
         env:
           NODE_ENV:           test
+          AI_PROVIDER:        mock
+          EMAIL_PROVIDER:     mock
           MONGO_URI:          mongodb://localhost:27017/ai-study-planner-ci
           JWT_SECRET:         ci_test_jwt_access_secret_32chars_long_ok_pad
           JWT_REFRESH_SECRET: ci_test_jwt_refresh_secret_32chars_long_ok_pad
@@ -52,7 +54,9 @@ jobs:
           CLIENT_URL:         http://localhost:5173
           ALLOWED_ORIGINS:    http://localhost:5173
           APP_VERSION:        "1.0.0"
+          EMAIL_ENABLED:      "false"
           ENABLE_EMAIL:       "false"
+          GOOGLE_OAUTH_ENABLED: "false"
           ENABLE_GOOGLE_OAUTH: "false"
 
       # ── FRONTEND ──────────────────────────────────────────────────────────────
@@ -75,10 +79,12 @@ jobs:
         run: cd frontend && npx playwright install --with-deps chromium
 
       - name: Start Backend for E2E
-        run: cd backend && npm run dev &
+        run: cd backend && node index.js &
         env:
           PORT:               5000
-          NODE_ENV:           development
+          NODE_ENV:           test
+          AI_PROVIDER:        mock
+          EMAIL_PROVIDER:     mock
           MONGO_URI:          mongodb://localhost:27017/ai-study-planner-e2e
           JWT_SECRET:         ci_test_jwt_access_secret_32chars_long_ok_pad
           JWT_REFRESH_SECRET: ci_test_jwt_refresh_secret_32chars_long_ok_pad
@@ -86,7 +92,9 @@ jobs:
           CLIENT_URL:         http://localhost:5173
           ALLOWED_ORIGINS:    http://localhost:5173
           APP_VERSION:        "1.0.0"
+          EMAIL_ENABLED:      "false"
           ENABLE_EMAIL:       "false"
+          GOOGLE_OAUTH_ENABLED: "false"
           ENABLE_GOOGLE_OAUTH: "false"
 
       - name: Start Frontend for E2E
@@ -98,7 +106,7 @@ jobs:
         run: |
           echo "Waiting for services to be ready..."
           for i in $(seq 1 30); do
-            API_OK=$(wget --quiet --spider http://localhost:5000/health 2>&1 && echo ok || echo fail)
+            API_OK=$(wget --quiet --spider http://localhost:5000/ready 2>&1 && echo ok || echo fail)
             FE_OK=$(wget --quiet --spider http://localhost:5173 2>&1 && echo ok || echo fail)
             if [ "$API_OK" = "ok" ] && [ "$FE_OK" = "ok" ]; then
               echo "✅ Both services are healthy after $((i * 2)) seconds"
@@ -115,6 +123,14 @@ jobs:
         env:
           VITE_API_URL: http://localhost:5000/api
 
+      # ── DOCKER BUILDS SMOKE CHECK ─────────────────────────────────────────────
+      - name: Build Backend Docker Image
+        run: docker build -t ai-study-planner-backend:latest ./backend
+
+      - name: Build Frontend Docker Image
+        run: docker build -t ai-study-planner-frontend:latest ./frontend
+
+      # ── ARTIFACT UPLOADS ON FAILURE ───────────────────────────────────────────
       - name: Upload Playwright Report on Failure
         if: failure()
         uses: actions/upload-artifact@v4
