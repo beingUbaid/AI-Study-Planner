@@ -28,12 +28,18 @@ import { runExamReminders } from '../src/utils/cronJobs.js';
 let mongoServer;
 
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create({
-    binary: {
-      version: '4.4.29'
-    }
-  });
-  await mongoose.connect(mongoServer.getUri());
+  try {
+    mongoServer = await MongoMemoryServer.create({
+      binary: {
+        version: '4.4.29'
+      }
+    });
+    await mongoose.connect(mongoServer.getUri());
+  } catch (err) {
+    console.warn('MongoMemoryServer failed to start, falling back to local MongoDB service:', err);
+    const fallbackUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ai-study-planner-test-reminder';
+    await mongoose.connect(fallbackUri);
+  }
 });
 
 afterAll(async () => {

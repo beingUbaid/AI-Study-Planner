@@ -20,15 +20,19 @@ beforeAll(async () => {
   process.env.NODE_ENV = 'test';
   process.env.JWT_SECRET = 'ci_test_jwt_access_secret_32chars_long_ok_pad';
   process.env.JWT_REFRESH_SECRET = 'ci_test_jwt_refresh_secret_32chars_long_ok_pad';
-  // Use a much smaller MongoDB binary version (4.4.29 is ~70MB compared to 8.x which is ~780MB)
-  // to avoid network timeouts during automated tests.
-  mongoServer = await MongoMemoryServer.create({
-    binary: {
-      version: '4.4.29'
-    }
-  });
-  const uri = mongoServer.getUri();
-  await mongoose.connect(uri);
+  try {
+    mongoServer = await MongoMemoryServer.create({
+      binary: {
+        version: '4.4.29'
+      }
+    });
+    const uri = mongoServer.getUri();
+    await mongoose.connect(uri);
+  } catch (err) {
+    console.warn('MongoMemoryServer failed to start, falling back to local MongoDB service:', err);
+    const fallbackUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ai-study-planner-test-auth';
+    await mongoose.connect(fallbackUri);
+  }
 }, 300000); // 5-minute timeout for initial binary download
 
 afterAll(async () => {
