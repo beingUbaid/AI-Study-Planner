@@ -87,9 +87,6 @@ NotificationDeliverySchema.pre('validate', function() {
 
 // Pre-save middleware to enforce controlled status transitions (Synchronous)
 NotificationDeliverySchema.pre('save', function() {
-  const isTesting = process.env.NODE_ENV === 'test' || typeof global.it === 'function' || typeof global.describe === 'function';
-  if (isTesting) return;
-
   if (this.isNew) {
     if (this.status !== 'pending' && this.status !== 'claimed') {
       throw new Error(`New notification delivery cannot start with status: ${this.status}`);
@@ -110,6 +107,10 @@ NotificationDeliverySchema.pre('save', function() {
 });
 
 NotificationDeliverySchema.post('init', function(doc) {
+  doc._originalStatus = doc.status;
+});
+
+NotificationDeliverySchema.post('save', function(doc) {
   doc._originalStatus = doc.status;
 });
 

@@ -112,13 +112,14 @@ describe('runExamReminders — core delivery lifecycle', () => {
     const todayStr  = new Date().toISOString().split('T')[0];
 
     // Pre-create a "sent" record
-    await NotificationDelivery.create({
+    await NotificationDelivery.collection.insertOne({
       user:          user._id,
       reminderType:  'exam_reminder',
       scheduledDate: todayStr,
       status:        'sent',
       attempts:      1,
-      sentAt:        new Date()
+      sentAt:        new Date(),
+      idempotencyKey: `${user._id}:null:null:exam_reminder:${todayStr}`
     });
 
     await runExamReminders();
@@ -153,14 +154,15 @@ describe('runExamReminders — stale claim recovery', () => {
     const past      = new Date(Date.now() - 15 * 60 * 1000); // 15 min ago
 
     // Simulate a worker that crashed after claiming but before sending
-    await NotificationDelivery.create({
+    await NotificationDelivery.collection.insertOne({
       user:           user._id,
       reminderType:   'exam_reminder',
       scheduledDate:  todayStr,
       status:         'claimed',
       attempts:       1,
       claimedAt:      past,
-      claimExpiresAt: past   // already expired → stale
+      claimExpiresAt: past,   // already expired → stale
+      idempotencyKey: `${user._id}:null:null:exam_reminder:${todayStr}`
     });
 
     await runExamReminders();
@@ -176,14 +178,15 @@ describe('runExamReminders — stale claim recovery', () => {
     const todayStr  = new Date().toISOString().split('T')[0];
     const future    = new Date(Date.now() + 8 * 60 * 1000); // 8 min from now — still valid
 
-    await NotificationDelivery.create({
+    await NotificationDelivery.collection.insertOne({
       user:           user._id,
       reminderType:   'exam_reminder',
       scheduledDate:  todayStr,
       status:         'claimed',
       attempts:       1,
       claimedAt:      new Date(),
-      claimExpiresAt: future
+      claimExpiresAt: future,
+      idempotencyKey: `${user._id}:null:null:exam_reminder:${todayStr}`
     });
 
     await runExamReminders();
@@ -203,14 +206,15 @@ describe('runExamReminders — retry lifecycle', () => {
     const todayStr  = new Date().toISOString().split('T')[0];
     const past      = new Date(Date.now() - 60 * 1000); // 1 minute ago
 
-    await NotificationDelivery.create({
+    await NotificationDelivery.collection.insertOne({
       user:          user._id,
       reminderType:  'exam_reminder',
       scheduledDate: todayStr,
       status:        'failed',
       attempts:      1,
       lastError:     'SMTP_CONN_REFUSED',
-      nextRetryAt:   past
+      nextRetryAt:   past,
+      idempotencyKey: `${user._id}:null:null:exam_reminder:${todayStr}`
     });
 
     await runExamReminders();
@@ -225,14 +229,15 @@ describe('runExamReminders — retry lifecycle', () => {
     const todayStr  = new Date().toISOString().split('T')[0];
     const future    = new Date(Date.now() + 10 * 60 * 1000);
 
-    await NotificationDelivery.create({
+    await NotificationDelivery.collection.insertOne({
       user:          user._id,
       reminderType:  'exam_reminder',
       scheduledDate: todayStr,
       status:        'failed',
       attempts:      1,
       lastError:     'SMTP_CONN_REFUSED',
-      nextRetryAt:   future
+      nextRetryAt:   future,
+      idempotencyKey: `${user._id}:null:null:exam_reminder:${todayStr}`
     });
 
     await runExamReminders();
@@ -248,14 +253,15 @@ describe('runExamReminders — retry lifecycle', () => {
     const todayStr  = new Date().toISOString().split('T')[0];
     const past      = new Date(Date.now() - 60 * 1000);
 
-    await NotificationDelivery.create({
+    await NotificationDelivery.collection.insertOne({
       user:          user._id,
       reminderType:  'exam_reminder',
       scheduledDate: todayStr,
       status:        'failed',
       attempts:      3,   // MAX_ATTEMPTS reached
       lastError:     'SMTP_CONN_REFUSED',
-      nextRetryAt:   past
+      nextRetryAt:   past,
+      idempotencyKey: `${user._id}:null:null:exam_reminder:${todayStr}`
     });
 
     await runExamReminders();
@@ -282,5 +288,93 @@ describe('runExamReminders — concurrent execution safety', () => {
     // Only one record should exist (unique index guarantees this)
     expect(records.length).toBe(1);
     expect(records[0].status).toBe('sent');
+  });
+});
+
+describe('NotificationDelivery Model Schema Validation & Transitions', () => {
+  test('allows creating new records with status pending or claimed', async () => {
+    const user = new mongoose.Types.ObjectId();
+    const doc = new NotificationDelivery({
+      user,
+      reminderType: 'exam_reminder',
+      scheduledDate: '2026-08-03',
+      status: 'pending'
+    });
+    await expect(doc.save()).resolves.toBeDefined();
+
+    const doc2 = new NotificationDelivery({
+      user,
+      reminderType: 'study_reminder',
+      scheduledDate: '2026-08-03',
+      status: 'claimed'
+    });
+    await expect(doc2.save()).resolves.toBeDefined();
+  });
+
+  test('throws error when creating new records with status sent or failed', async () => {
+    const user = new mongoose.Types.ObjectId();
+    const doc = new NotificationDelivery({
+      user,
+      reminderType: 'exam_reminder',
+      scheduledDate: '2026-08-04',
+      status: 'sent'
+    });
+    await expect(doc.save()).rejects.toThrow(/New notification delivery cannot start with status: sent/);
+
+    const doc2 = new NotificationDelivery({
+      user,
+      reminderType: 'study_reminder',
+      scheduledDate: '2026-08-04',
+      status: 'failed'
+    });
+    await expect(doc2.save()).rejects.toThrow(/New notification delivery cannot start with status: failed/);
+  });
+
+  test('allows valid status transitions', async () => {
+    const user = new mongoose.Types.ObjectId();
+    const doc = await NotificationDelivery.create({
+      user,
+      reminderType: 'exam_reminder',
+      scheduledDate: '2026-08-05',
+      status: 'pending'
+    });
+
+    // pending -> claimed
+    doc.status = 'claimed';
+    await expect(doc.save()).resolves.toBeDefined();
+
+    // claimed -> sent
+    doc.status = 'sent';
+    await expect(doc.save()).resolves.toBeDefined();
+
+    // Reset and test claimed -> failed -> claimed
+    const doc2 = await NotificationDelivery.create({
+      user,
+      reminderType: 'study_reminder',
+      scheduledDate: '2026-08-05',
+      status: 'pending'
+    });
+    doc2.status = 'claimed';
+    await doc2.save();
+
+    doc2.status = 'failed';
+    await expect(doc2.save()).resolves.toBeDefined();
+
+    doc2.status = 'claimed';
+    await expect(doc2.save()).resolves.toBeDefined();
+  });
+
+  test('throws error on invalid status transitions', async () => {
+    const user = new mongoose.Types.ObjectId();
+    const doc = await NotificationDelivery.create({
+      user,
+      reminderType: 'exam_reminder',
+      scheduledDate: '2026-08-06',
+      status: 'pending'
+    });
+
+    // pending -> sent (invalid)
+    doc.status = 'sent';
+    await expect(doc.save()).rejects.toThrow(/Invalid status transition from pending to sent/);
   });
 });

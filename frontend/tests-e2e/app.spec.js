@@ -174,7 +174,7 @@ test.describe('AI Study Planner E2E Flows', () => {
 
   test('Registration, Verification, and Login Flow', async ({ page }) => {
     await page.goto(`${BASE_URL}/register`);
-    await expect(page.locator('h2')).toContainText(/Create your account/i);
+    await expect(page.locator('h2').first()).toContainText(/Create an Account/i);
 
     // Fill registration form
     await page.fill('input[type="text"]', 'E2E Student');
@@ -187,19 +187,19 @@ test.describe('AI Study Planner E2E Flows', () => {
     await expect(page.locator('h2')).toContainText(/Verify your email/i);
 
     // Enter verification code
-    await page.fill('input[placeholder="Enter 6-digit code"]', '123456');
+    await page.fill('input[placeholder="6-Digit Code"]', '123456');
     await page.click('button[type="submit"]');
 
     // Should login and redirect to dashboard
     await page.waitForURL('**/dashboard*');
-    await expect(page.locator('h1')).toContainText(/Dashboard/i);
+    await expect(page.locator('h2').first()).toContainText(/Welcome back/i);
   });
 
   test('Protected Route Redirects and Direct Navigation', async ({ page }) => {
     // Unauthenticated navigation to protected route should redirect to login
     await page.goto(`${BASE_URL}/dashboard`);
     await page.waitForURL('**/login*');
-    await expect(page.locator('h2')).toContainText(/Sign in to your account/i);
+    await expect(page.locator('h2').first()).toContainText(/Welcome Back/i);
   });
 
   test('Syllabus Upload, AI Extraction, and Study Plan Generation', async ({ page }) => {
@@ -212,7 +212,7 @@ test.describe('AI Study Planner E2E Flows', () => {
 
     // Navigate to Subjects view
     await page.goto(`${BASE_URL}/subjects`);
-    await expect(page.locator('h1')).toContainText(/Manage Subjects/i);
+    await expect(page.locator('h2').first()).toContainText(/Subject Management/i);
 
     // Open add subject modal or simulate adding subject
     const addSubjectButton = page.locator('button:has-text("Add Subject")').first();

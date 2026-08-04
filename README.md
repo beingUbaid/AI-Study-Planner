@@ -15,7 +15,7 @@ graph TD
         A[React 19 SPA <br> Vite / Vercel]
     end
     subgraph Backend Services
-        B[Express API <br> Node 20 / Render / Railway]
+        B[Express API <br> Node 22 / Render / Railway]
         D[Background Worker <br> node-cron / Railway]
     end
     subgraph Databases & External Integrations
@@ -68,7 +68,7 @@ To handle concurrent worker pods and prevent duplicate emails:
 ## ⚡ Quick Start (Local Development)
 
 ### Prerequisites
-*   Node.js 20+
+*   Node.js 22
 *   MongoDB running locally or Atlas access
 
 ### 1. Clone & Install Dependencies

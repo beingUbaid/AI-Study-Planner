@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import crypto from 'crypto';
+import { URL } from 'node:url';
 import User from '../models/User.js';
 import Subject from '../models/Subject.js';
 import StudyPlan from '../models/StudyPlan.js';

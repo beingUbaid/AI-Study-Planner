@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { URL } from 'node:url';
 
 if (process.env.JEST_WORKER_ID) {
   process.env.NODE_ENV = 'test';

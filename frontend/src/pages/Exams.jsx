@@ -9,7 +9,8 @@ import {
   TrendingUp,
   Sparkles,
   Flame,
-  Award
+  Award,
+  Loader2
 } from 'lucide-react';
 import { aiAPI } from '../services/api';
 

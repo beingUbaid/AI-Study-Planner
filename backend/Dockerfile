@@ -1,5 +1,5 @@
-# Pinned Node 20 alpine image
-FROM node:20.18.0-alpine
+# Pinned Node 22 alpine image
+FROM node:22-alpine
 
 # Set environment
 ENV NODE_ENV=production

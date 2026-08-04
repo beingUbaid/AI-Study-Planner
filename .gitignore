@@ -35,4 +35,8 @@ backend/uploads/*
 # Test coverage
 coverage
 backend/coverage
+frontend/test-results
+frontend/playwright-report
+playwright-report
+test-results
 
