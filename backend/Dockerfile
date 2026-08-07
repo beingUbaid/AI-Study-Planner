@@ -29,7 +29,7 @@ EXPOSE 5000
 
 # Docker healthcheck using the readiness endpoint /ready
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "const http = require('http'); const req = http.request({ host: 'localhost', port: process.env.PORT || 5000, path: '/ready', timeout: 2000 }, (res) => { if (res.statusCode === 200) { process.exit(0); } else { process.exit(1); } }); req.on('error', () => process.exit(1)); req.end();"
+  CMD node -e "const http = require('http'); const req = http.request({ host: '127.0.0.1', port: process.env.PORT || 5000, path: '/ready', timeout: 2000 }, (res) => { if (res.statusCode === 200) { process.exit(0); } else { process.exit(1); } }); req.on('error', () => process.exit(1)); req.end();"
 
 # Start the application
 CMD ["node", "index.js"]
