@@ -32,7 +32,7 @@ beforeAll(async () => {
     const baseUri = process.env.MONGO_URI;
     const uri = baseUri.replace(/\/([^/?]+)(?=\?|$)/, '/$1-reminder');
     console.log('Connecting to isolated MONGO_URI:', uri);
-    await mongoose.connect(uri);
+    await mongoose.connect(uri, { family: 4 });
   } else {
     try {
       mongoServer = await MongoMemoryServer.create({
@@ -40,11 +40,11 @@ beforeAll(async () => {
           version: '4.4.29'
         }
       });
-      await mongoose.connect(mongoServer.getUri());
+      await mongoose.connect(mongoServer.getUri(), { family: 4 });
     } catch (err) {
       console.warn('MongoMemoryServer failed to start, falling back to local MongoDB service:', err);
       const fallbackUri = 'mongodb://127.0.0.1:27017/ai-study-planner-test-reminder';
-      await mongoose.connect(fallbackUri);
+      await mongoose.connect(fallbackUri, { family: 4 });
     }
   }
 });

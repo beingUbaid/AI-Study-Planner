@@ -25,7 +25,7 @@ beforeAll(async () => {
     const baseUri = process.env.MONGO_URI;
     const uri = baseUri.replace(/\/([^/?]+)(?=\?|$)/, '/$1-auth');
     console.log('Connecting to isolated MONGO_URI:', uri);
-    await mongoose.connect(uri);
+    await mongoose.connect(uri, { family: 4 });
   } else {
     try {
       mongoServer = await MongoMemoryServer.create({
@@ -34,11 +34,11 @@ beforeAll(async () => {
         }
       });
       const uri = mongoServer.getUri();
-      await mongoose.connect(uri);
+      await mongoose.connect(uri, { family: 4 });
     } catch (err) {
       console.warn('MongoMemoryServer failed to start, falling back to local MongoDB service:', err);
       const fallbackUri = 'mongodb://127.0.0.1:27017/ai-study-planner-test-auth';
-      await mongoose.connect(fallbackUri);
+      await mongoose.connect(fallbackUri, { family: 4 });
     }
   }
 }, 300000); // 5-minute timeout for initial binary download
