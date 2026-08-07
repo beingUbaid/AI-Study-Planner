@@ -28,23 +28,32 @@ import { runExamReminders } from '../src/utils/cronJobs.js';
 let mongoServer;
 
 beforeAll(async () => {
-  try {
-    mongoServer = await MongoMemoryServer.create({
-      binary: {
-        version: '4.4.29'
-      }
-    });
-    await mongoose.connect(mongoServer.getUri());
-  } catch (err) {
-    console.warn('MongoMemoryServer failed to start, falling back to local MongoDB service:', err);
-    const fallbackUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ai-study-planner-test-reminder';
-    await mongoose.connect(fallbackUri);
+  if (process.env.MONGO_URI) {
+    const baseUri = process.env.MONGO_URI;
+    const uri = baseUri.replace(/\/([^/?]+)(?=\?|$)/, '/$1-reminder');
+    console.log('Connecting to isolated MONGO_URI:', uri);
+    await mongoose.connect(uri);
+  } else {
+    try {
+      mongoServer = await MongoMemoryServer.create({
+        binary: {
+          version: '4.4.29'
+        }
+      });
+      await mongoose.connect(mongoServer.getUri());
+    } catch (err) {
+      console.warn('MongoMemoryServer failed to start, falling back to local MongoDB service:', err);
+      const fallbackUri = 'mongodb://127.0.0.1:27017/ai-study-planner-test-reminder';
+      await mongoose.connect(fallbackUri);
+    }
   }
 });
 
 afterAll(async () => {
   await mongoose.connection.close();
-  await mongoServer.stop();
+  if (mongoServer) {
+    await mongoServer.stop();
+  }
 });
 
 beforeEach(async () => {

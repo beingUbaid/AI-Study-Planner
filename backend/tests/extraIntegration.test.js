@@ -26,17 +26,24 @@ beforeAll(async () => {
   process.env.JWT_SECRET = 'ci_test_jwt_access_secret_32chars_long_ok_pad';
   process.env.JWT_REFRESH_SECRET = 'ci_test_jwt_refresh_secret_32chars_long_ok_pad';
 
-  try {
-    mongoServer = await MongoMemoryServer.create({
-      binary: {
-        version: '4.4.29'
-      }
-    });
-    await mongoose.connect(mongoServer.getUri());
-  } catch (err) {
-    console.warn('MongoMemoryServer failed to start, falling back to local MongoDB service:', err);
-    const fallbackUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ai-study-planner-test-extra';
-    await mongoose.connect(fallbackUri);
+  if (process.env.MONGO_URI) {
+    const baseUri = process.env.MONGO_URI;
+    const uri = baseUri.replace(/\/([^/?]+)(?=\?|$)/, '/$1-extra');
+    console.log('Connecting to isolated MONGO_URI:', uri);
+    await mongoose.connect(uri);
+  } else {
+    try {
+      mongoServer = await MongoMemoryServer.create({
+        binary: {
+          version: '4.4.29'
+        }
+      });
+      await mongoose.connect(mongoServer.getUri());
+    } catch (err) {
+      console.warn('MongoMemoryServer failed to start, falling back to local MongoDB service:', err);
+      const fallbackUri = 'mongodb://127.0.0.1:27017/ai-study-planner-test-extra';
+      await mongoose.connect(fallbackUri);
+    }
   }
   
   // Await real index creation directly on MongoDB to enforce uniqueness
